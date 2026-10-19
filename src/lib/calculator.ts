@@ -141,11 +141,11 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
   // ==========================================
   // Husmaterialsats
   let husmaterialsatsKostnad = 0;
+  const matRate = Math.max(0, input.husmaterialsatsPerKvm || PRESETS.husmaterialsats.recommendedPerKvm);
   if (input.husmaterialsatsMode === 'fixed') {
     husmaterialsatsKostnad = Math.max(0, input.customHusmaterialsatsFastPris || 0);
   } else {
-    const rate = Math.max(0, input.husmaterialsatsPerKvm || PRESETS.husmaterialsats.recommendedPerKvm);
-    husmaterialsatsKostnad = Math.round(input.husBostadsyta * rate);
+    husmaterialsatsKostnad = Math.round(input.husBostadsyta * matRate);
   }
 
   items.push({
@@ -157,17 +157,17 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
     formulaNote:
       input.husmaterialsatsMode === 'fixed'
         ? 'Fast avtalspris'
-        : `${input.husBostadsyta} m² x ${input.husmaterialsatsPerKvm.toLocaleString('sv-SE')} kr/m²`,
+        : `${input.husBostadsyta} m² x ${matRate.toLocaleString('sv-SE')} kr/m²`,
     isCustom: input.husmaterialsatsMode === 'fixed',
   });
 
   // Byggentreprenad / montering
   let byggkostnadTotal = 0;
+  const buildRate = Math.max(0, input.byggkostnadPerKvm || PRESETS.byggkostnad.schablonPerKvm);
   if (input.byggkostnadMode === 'custom') {
     byggkostnadTotal = Math.max(0, input.customByggkostnad || 0);
   } else {
-    const rate = Math.max(0, input.byggkostnadPerKvm || PRESETS.byggkostnad.schablonPerKvm);
-    byggkostnadTotal = Math.round(input.husBostadsyta * rate);
+    byggkostnadTotal = Math.round(input.husBostadsyta * buildRate);
   }
 
   items.push({
@@ -179,21 +179,21 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
     formulaNote:
       input.byggkostnadMode === 'custom'
         ? 'Entreprenadoffert'
-        : `${input.husBostadsyta} m² x ${input.byggkostnadPerKvm.toLocaleString('sv-SE')} kr/m²`,
+        : `${input.husBostadsyta} m² x ${buildRate.toLocaleString('sv-SE')} kr/m²`,
     isCustom: input.byggkostnadMode === 'custom',
   });
 
   // Byggkostnad komplementbyggnad (om extrabyggnaderYta > 0 och aktiverad)
   if (input.extrabyggnaderYta > 0 && input.inkluderaKomplementIByggkostnad) {
     let komplementTotal = 0;
+    const kompRate = Math.max(
+      0,
+      input.komplementByggkostnadPerKvm || PRESETS.komplementbyggnad.schablonPerKvm
+    );
     if (input.komplementByggkostnadMode === 'custom') {
       komplementTotal = Math.max(0, input.customKomplementByggkostnad || 0);
     } else {
-      const rate = Math.max(
-        0,
-        input.komplementByggkostnadPerKvm || PRESETS.komplementbyggnad.schablonPerKvm
-      );
-      komplementTotal = Math.round(input.extrabyggnaderYta * rate);
+      komplementTotal = Math.round(input.extrabyggnaderYta * kompRate);
     }
 
     items.push({
@@ -205,7 +205,7 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
       formulaNote:
         input.komplementByggkostnadMode === 'custom'
           ? 'Offertpris'
-          : `${input.extrabyggnaderYta} m² x ${input.komplementByggkostnadPerKvm.toLocaleString('sv-SE')} kr/m²`,
+          : `${input.extrabyggnaderYta} m² x ${kompRate.toLocaleString('sv-SE')} kr/m²`,
       isCustom: input.komplementByggkostnadMode === 'custom',
     });
   }
