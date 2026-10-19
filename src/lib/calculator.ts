@@ -4,8 +4,40 @@ import {
   CalculationLineItem,
   CalculationCategory,
   CategorySummary,
+  SewerTerrainType,
 } from '@/types/calculation';
 import { PRESETS } from '@/config/presets';
+
+/**
+ * Delade hjälpfunktioner. Både kalkylatorn och förhandsvisningarna i stegen ska använda
+ * dessa, så att summan som visas i ett steg alltid är densamma som räknas in i totalen.
+ */
+
+/** Kr per löpande meter för extra avloppsgrävning i vald terräng. */
+export function getExtraAvloppRate(terrain: SewerTerrainType): number {
+  const rateFor = (value: SewerTerrainType) =>
+    PRESETS.extraAvlopp.find((t) => t.value === value)?.ratePerUnit;
+  return rateFor(terrain) ?? rateFor('easy') ?? 0;
+}
+
+/** Kr per m² rivningsyta. Asbest ger högre schablon. */
+export function getRivningRate(harAsbestrisk: boolean): number {
+  return harAsbestrisk ? PRESETS.rivning.asbestPerKvm : PRESETS.rivning.standardPerKvm;
+}
+
+export function calculateExtraAvloppCost(
+  input: Pick<CalculationInput, 'extraAvloppEnabled' | 'extraAvloppMeter' | 'extraAvloppTerrain'>
+): number {
+  if (!input.extraAvloppEnabled || !(input.extraAvloppMeter > 0)) return 0;
+  return Math.round(input.extraAvloppMeter * getExtraAvloppRate(input.extraAvloppTerrain));
+}
+
+export function calculateRivningCost(
+  input: Pick<CalculationInput, 'harRivningsbehov' | 'rivningsYta' | 'harAsbestrisk'>
+): number {
+  if (!input.harRivningsbehov || !(input.rivningsYta > 0)) return 0;
+  return Math.round(input.rivningsYta * getRivningRate(input.harAsbestrisk));
+}
 
 /**
  * Ren beräkningsfunktion för husbyggnadskalkyl.
@@ -71,15 +103,9 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
   });
 
   // Extra avloppsgrävning
-  let extraAvloppKostnad = 0;
   if (input.extraAvloppEnabled && input.extraAvloppMeter > 0) {
-    let rate = 1500;
-    if (input.extraAvloppTerrain === 'difficult') rate = 3000;
-    if (input.extraAvloppTerrain === 'blasting') rate = 6000;
-    if (input.customExtraAvloppCostPerMeter > 0 && input.customExtraAvloppCostPerMeter !== rate) {
-      rate = input.customExtraAvloppCostPerMeter;
-    }
-    extraAvloppKostnad = Math.round(input.extraAvloppMeter * rate);
+    const rate = getExtraAvloppRate(input.extraAvloppTerrain);
+    const extraAvloppKostnad = calculateExtraAvloppCost(input);
     const terrainLabel =
       PRESETS.extraAvlopp.find((t) => t.value === input.extraAvloppTerrain)?.label || '';
 
@@ -115,16 +141,9 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
   }
 
   // Rivning
-  let rivningsKostnad = 0;
   if (input.harRivningsbehov && input.rivningsYta > 0) {
-    if (input.customRivningskostnad > 0 && !input.harAsbestrisk) {
-      rivningsKostnad = input.customRivningskostnad;
-    } else {
-      const rate = input.harAsbestrisk
-        ? PRESETS.rivning.asbestPerKvm
-        : PRESETS.rivning.standardPerKvm;
-      rivningsKostnad = Math.round(input.rivningsYta * rate);
-    }
+    const rivningsRate = getRivningRate(input.harAsbestrisk);
+    const rivningsKostnad = calculateRivningCost(input);
 
     items.push({
       id: 'rivning',
@@ -132,7 +151,7 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
       name: `Rivning av befintlig byggnad (${input.rivningsYta} m²)${input.harAsbestrisk ? ' inkl. asbestsanering' : ''}`,
       amount: rivningsKostnad,
       description: PRESETS.rivning.description,
-      formulaNote: `${input.rivningsYta} m² x ${input.harAsbestrisk ? '6 000' : '4 000'} kr/m²`,
+      formulaNote: `${input.rivningsYta} m² x ${rivningsRate.toLocaleString('sv-SE')} kr/m²`,
     });
   }
 
@@ -140,12 +159,12 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
   // 3. BYGGNATION & MATERIAL
   // ==========================================
   // Husmaterialsats
+  const husRate = Math.max(0, input.husmaterialsatsPerKvm ?? PRESETS.husmaterialsats.recommendedPerKvm);
   let husmaterialsatsKostnad = 0;
   if (input.husmaterialsatsMode === 'fixed') {
     husmaterialsatsKostnad = Math.max(0, input.customHusmaterialsatsFastPris || 0);
   } else {
-    const rate = Math.max(0, input.husmaterialsatsPerKvm || PRESETS.husmaterialsats.recommendedPerKvm);
-    husmaterialsatsKostnad = Math.round(input.husBostadsyta * rate);
+    husmaterialsatsKostnad = Math.round(input.husBostadsyta * husRate);
   }
 
   items.push({
@@ -157,17 +176,17 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
     formulaNote:
       input.husmaterialsatsMode === 'fixed'
         ? 'Fast avtalspris'
-        : `${input.husBostadsyta} m² x ${input.husmaterialsatsPerKvm.toLocaleString('sv-SE')} kr/m²`,
+        : `${input.husBostadsyta} m² x ${husRate.toLocaleString('sv-SE')} kr/m²`,
     isCustom: input.husmaterialsatsMode === 'fixed',
   });
 
   // Byggentreprenad / montering
+  const byggRate = Math.max(0, input.byggkostnadPerKvm ?? PRESETS.byggkostnad.schablonPerKvm);
   let byggkostnadTotal = 0;
   if (input.byggkostnadMode === 'custom') {
     byggkostnadTotal = Math.max(0, input.customByggkostnad || 0);
   } else {
-    const rate = Math.max(0, input.byggkostnadPerKvm || PRESETS.byggkostnad.schablonPerKvm);
-    byggkostnadTotal = Math.round(input.husBostadsyta * rate);
+    byggkostnadTotal = Math.round(input.husBostadsyta * byggRate);
   }
 
   items.push({
@@ -179,21 +198,21 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
     formulaNote:
       input.byggkostnadMode === 'custom'
         ? 'Entreprenadoffert'
-        : `${input.husBostadsyta} m² x ${input.byggkostnadPerKvm.toLocaleString('sv-SE')} kr/m²`,
+        : `${input.husBostadsyta} m² x ${byggRate.toLocaleString('sv-SE')} kr/m²`,
     isCustom: input.byggkostnadMode === 'custom',
   });
 
   // Byggkostnad komplementbyggnad (om extrabyggnaderYta > 0 och aktiverad)
   if (input.extrabyggnaderYta > 0 && input.inkluderaKomplementIByggkostnad) {
+    const komplementRate = Math.max(
+      0,
+      input.komplementByggkostnadPerKvm ?? PRESETS.komplementbyggnad.schablonPerKvm
+    );
     let komplementTotal = 0;
     if (input.komplementByggkostnadMode === 'custom') {
       komplementTotal = Math.max(0, input.customKomplementByggkostnad || 0);
     } else {
-      const rate = Math.max(
-        0,
-        input.komplementByggkostnadPerKvm || PRESETS.komplementbyggnad.schablonPerKvm
-      );
-      komplementTotal = Math.round(input.extrabyggnaderYta * rate);
+      komplementTotal = Math.round(input.extrabyggnaderYta * komplementRate);
     }
 
     items.push({
@@ -205,7 +224,7 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
       formulaNote:
         input.komplementByggkostnadMode === 'custom'
           ? 'Offertpris'
-          : `${input.extrabyggnaderYta} m² x ${input.komplementByggkostnadPerKvm.toLocaleString('sv-SE')} kr/m²`,
+          : `${input.extrabyggnaderYta} m² x ${komplementRate.toLocaleString('sv-SE')} kr/m²`,
       isCustom: input.komplementByggkostnadMode === 'custom',
     });
   }
@@ -255,7 +274,7 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
   });
 
   // Bygglov grundavgift
-  const bygglovAvgift = Math.max(0, input.bygglovGrundavgift || PRESETS.bygglov.grundavgift);
+  const bygglovAvgift = Math.max(0, input.bygglovGrundavgift ?? PRESETS.bygglov.grundavgift);
   items.push({
     id: 'bygglov_grund',
     category: 'kommun_myndighet',
@@ -268,12 +287,9 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
   // Planavgift
   let planavgift = 0;
   if (input.arInomPlanlagtOmrade) {
-    if (input.customPlanavgift > 0 && input.planavgiftPerKvm === 0) {
-      planavgift = input.customPlanavgift;
-    } else {
-      const totalArea = (input.husBostadsyta || 0) + (input.extrabyggnaderYta || 0);
-      planavgift = Math.round(totalArea * (input.planavgiftPerKvm || PRESETS.bygglov.planavgiftDefaultPerKvm));
-    }
+    const totalArea = (input.husBostadsyta || 0) + (input.extrabyggnaderYta || 0);
+    const planRate = input.planavgiftPerKvm ?? PRESETS.bygglov.planavgiftDefaultPerKvm;
+    planavgift = Math.round(totalArea * planRate);
 
     items.push({
       id: 'planavgift',
@@ -281,7 +297,7 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
       name: 'Planavgift (Detaljplanerat område)',
       amount: planavgift,
       description: PRESETS.bygglov.legalNotice,
-      formulaNote: `${(input.husBostadsyta || 0) + (input.extrabyggnaderYta || 0)} m² BTA x ${input.planavgiftPerKvm} kr/m²`,
+      formulaNote: `${totalArea} m² BTA x ${planRate} kr/m²`,
     });
   }
 
@@ -403,14 +419,10 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
 
   // Badrum / Kakel
   let badrumKostnad = 0;
-  const totalVatrumsyta = (input.antalBadrumTvatt || 0) * (input.kvmPerVatutrymme || 10);
+  const totalVatrumsyta = (input.antalBadrumTvatt || 0) * (input.kvmPerVatutrymme ?? 10);
 
   if (input.badrumKakelTillval === 'custom') {
-    if (input.customBadrumTotalCost > 0) {
-      badrumKostnad = input.customBadrumTotalCost;
-    } else {
-      badrumKostnad = Math.round(totalVatrumsyta * (input.customBadrumExtraPerKvm || 0));
-    }
+    badrumKostnad = Math.max(0, input.customBadrumTotalCost || 0);
   } else {
     const match = PRESETS.badrum.tiers.find((b) => b.value === input.badrumKakelTillval);
     const extraRate = match?.ratePerUnit ?? 0;
@@ -421,7 +433,7 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
   items.push({
     id: 'badrum_kakel',
     category: 'interior_tillval',
-    name: `Badrum & klinker (${input.antalBadrumTvatt} st våtrum, tot ${totalVatrumsyta} m²)`,
+    name: `Tillval klinker/kakel, våtrum (${input.antalBadrumTvatt} st, tot ${totalVatrumsyta} m²)`,
     amount: badrumKostnad,
     description: `${matchBadrum?.label || 'Tillval'}: ${matchBadrum?.description || ''}`,
     formulaNote:
@@ -434,12 +446,8 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
   // Golv
   let golvKostnad = 0;
   if (input.uppgraderaGolv) {
-    if (input.customGolvCost > 0 && input.golvKostnadPerKvm === 0) {
-      golvKostnad = input.customGolvCost;
-    } else {
-      const rate = input.golvKostnadPerKvm || PRESETS.golv.merprisPerKvm;
-      golvKostnad = Math.round((input.husBostadsyta || 0) * rate);
-    }
+    const golvRate = input.golvKostnadPerKvm ?? PRESETS.golv.merprisPerKvm;
+    golvKostnad = Math.round((input.husBostadsyta || 0) * golvRate);
 
     items.push({
       id: 'golv_uppgradering',
@@ -447,7 +455,7 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
       name: `Golvuppgradering (${input.husBostadsyta} m² parkett)`,
       amount: golvKostnad,
       description: `${PRESETS.golv.brandExample}. ${PRESETS.golv.notice}`,
-      formulaNote: `${input.husBostadsyta} m² x ${(input.golvKostnadPerKvm || PRESETS.golv.merprisPerKvm).toLocaleString('sv-SE')} kr/m²`,
+      formulaNote: `${input.husBostadsyta} m² x ${golvRate.toLocaleString('sv-SE')} kr/m²`,
     });
   }
 
@@ -479,12 +487,9 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
   // Finplanering tomt
   let finplaneringKostnad = 0;
   if (input.finplaneringTomt && input.finplaneringYtaKvm > 0) {
-    if (input.customFinplaneringCost > 0 && input.finplaneringKostnadPerKvm === 0) {
-      finplaneringKostnad = input.customFinplaneringCost;
-    } else {
-      const rate = input.finplaneringKostnadPerKvm || PRESETS.finplaneringTomt.recommendedPerKvm;
-      finplaneringKostnad = Math.round(input.finplaneringYtaKvm * rate);
-    }
+    const finplaneringRate =
+      input.finplaneringKostnadPerKvm ?? PRESETS.finplaneringTomt.recommendedPerKvm;
+    finplaneringKostnad = Math.round(input.finplaneringYtaKvm * finplaneringRate);
 
     items.push({
       id: 'finplanering_tomt',
@@ -492,7 +497,7 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
       name: `Finplanering tomt (${input.finplaneringYtaKvm} m²)`,
       amount: finplaneringKostnad,
       description: PRESETS.finplaneringTomt.description,
-      formulaNote: `${input.finplaneringYtaKvm} m² x ${input.finplaneringKostnadPerKvm} kr/m²`,
+      formulaNote: `${input.finplaneringYtaKvm} m² x ${finplaneringRate} kr/m²`,
     });
   }
 
@@ -505,7 +510,7 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
     if (input.altanVal === 'large') sqm = 75;
     if (input.altanVal === 'custom') sqm = input.altanKvm || 0;
 
-    const rate = input.altanKostnadPerKvm || PRESETS.altan.schablonPerKvm;
+    const rate = input.altanKostnadPerKvm ?? PRESETS.altan.schablonPerKvm;
     altanKostnad = Math.round(sqm * rate);
 
     items.push({
@@ -525,7 +530,7 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
   const subtotalBeforeFinance = items.reduce((sum, item) => sum + item.amount, 0);
 
   // Beräkna uppskattat lånebelopp
-  const belaningsgrad = Math.min(100, Math.max(0, input.belaningsgradProcent || 85)) / 100;
+  const belaningsgrad = Math.min(100, Math.max(0, input.belaningsgradProcent ?? 85)) / 100;
   const beraknatLanebelopp =
     input.egetLanebelopp > 0
       ? input.egetLanebelopp
@@ -534,8 +539,11 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
   // Byggnadskreditiv
   let kreditivkostnad = 0;
   if (input.beraknaKreditiv && beraknatLanebelopp > 0) {
-    const rantesats = (input.kreditivRantesatsProcent || PRESETS.finansiering.rantesatsSchablon) / 100;
-    const ar = (input.kreditivByggtidManader || PRESETS.finansiering.standardByggtidManader) / 12;
+    const rantePct = input.kreditivRantesatsProcent ?? PRESETS.finansiering.rantesatsSchablon;
+    const byggtidManader =
+      input.kreditivByggtidManader ?? PRESETS.finansiering.standardByggtidManader;
+    const rantesats = rantePct / 100;
+    const ar = byggtidManader / 12;
     // Byggnadskreditiv dras successivt under byggtiden, schablon 55 % snittutnyttjande
     kreditivkostnad = Math.round(
       beraknatLanebelopp * rantesats * ar * PRESETS.finansiering.genomsnittligtUtnyttjandeGrad
@@ -546,8 +554,8 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
       category: 'finansiering_avgifter',
       name: 'Ränta byggnadskreditiv under byggtiden',
       amount: kreditivkostnad,
-      description: `Räntekostnad för byggnadskreditiv beräknat på ${beraknatLanebelopp.toLocaleString('sv-SE')} kr i lån med ${input.kreditivRantesatsProcent} % ränta under ${input.kreditivByggtidManader} månader (genomsnittlig utnyttjandegrad 55 %).`,
-      formulaNote: `${input.kreditivRantesatsProcent} % ränta, ${input.kreditivByggtidManader} mån`,
+      description: `Räntekostnad för byggnadskreditiv beräknat på ${beraknatLanebelopp.toLocaleString('sv-SE')} kr i lån med ${rantePct} % ränta under ${byggtidManader} månader (genomsnittlig utnyttjandegrad 55 %).`,
+      formulaNote: `${rantePct} % ränta, ${byggtidManader} mån`,
     });
   }
 

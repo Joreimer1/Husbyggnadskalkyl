@@ -440,7 +440,6 @@ export const DEFAULT_CALCULATION_INPUT: CalculationInput = {
   extraAvloppEnabled: false,
   extraAvloppMeter: 20,
   extraAvloppTerrain: 'easy',
-  customExtraAvloppCostPerMeter: 1500,
 
   // Byggkostnad / entreprenad
   byggkostnadMode: 'sqm',
@@ -477,7 +476,6 @@ export const DEFAULT_CALCULATION_INPUT: CalculationInput = {
   bygglovGrundavgift: PRESETS.bygglov.grundavgift,
   arInomPlanlagtOmrade: true,
   planavgiftPerKvm: PRESETS.bygglov.planavgiftDefaultPerKvm,
-  customPlanavgift: 37500,
 
   nybyggnadskartaMode: 'preset',
   customNybyggnadskartaCost: PRESETS.nybyggnadskarta.schablon,
@@ -490,7 +488,6 @@ export const DEFAULT_CALCULATION_INPUT: CalculationInput = {
   harRivningsbehov: false,
   rivningsYta: 50,
   harAsbestrisk: false,
-  customRivningskostnad: 200000,
 
   // Invasiva växter
   invasivaVaxterTyp: 'none',
@@ -517,12 +514,10 @@ export const DEFAULT_CALCULATION_INPUT: CalculationInput = {
   antalBadrumTvatt: 2,
   kvmPerVatutrymme: PRESETS.badrum.standardYtaPerBadrum,
   badrumKakelTillval: 'medium',
-  customBadrumExtraPerKvm: 300,
   customBadrumTotalCost: 6000,
 
   uppgraderaGolv: true,
   golvKostnadPerKvm: PRESETS.golv.merprisPerKvm,
-  customGolvCost: 150000,
 
   ovrigaTillval: 'small',
   customOvrigaTillvalCost: 50000,
@@ -531,7 +526,6 @@ export const DEFAULT_CALCULATION_INPUT: CalculationInput = {
   finplaneringTomt: true,
   finplaneringYtaKvm: 400,
   finplaneringKostnadPerKvm: PRESETS.finplaneringTomt.recommendedPerKvm,
-  customFinplaneringCost: 80000,
 
   altanVal: 'medium',
   altanKvm: 40,
