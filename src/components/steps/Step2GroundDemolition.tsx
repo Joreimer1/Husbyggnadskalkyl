@@ -1,9 +1,9 @@
 import React from 'react';
-import { CalculationInput, GroundworkPreset, SewerTerrainType, InvasiveSpeciesType } from '@/types/calculation';
+import { CalculationInput, GroundworkPreset, SewerTerrainType, InvasiveSpeciesType, GeoteknikTier } from '@/types/calculation';
 import { PRESETS } from '@/config/presets';
 import { formatCurrency } from '@/lib/formatters';
-import { calculateExtraAvloppCost, calculateRivningCost } from '@/lib/calculator';
-import { Shovel, Trash2, Sprout } from 'lucide-react';
+import { calculateExtraAvloppCost, calculateRivningCost, calculateGeoteknikCost } from '@/lib/calculator';
+import { Shovel, Trash2, Sprout, Layers } from 'lucide-react';
 
 interface StepProps {
   input: CalculationInput;
@@ -13,6 +13,7 @@ interface StepProps {
 export function Step2GroundDemolition({ input, onChange }: StepProps) {
   // Samma funktioner som kalkylatorn använder, så att förhandsvisningen alltid
   // stämmer med det som räknas in i totalen.
+  const calculatedGeoteknikCost = calculateGeoteknikCost(input);
   const calculatedSewerCost = calculateExtraAvloppCost(input);
   const calculatedDemolitionCost = calculateRivningCost(input);
 
@@ -84,6 +85,71 @@ export function Step2GroundDemolition({ input, onChange }: StepProps) {
               value={input.customGrundarbeteCost}
               onChange={(e) => onChange({ customGrundarbeteCost: Number(e.target.value) || 0 })}
               className="w-full max-w-xs px-3 py-1.5 text-xs sm:text-sm border border-slate-300 rounded-md bg-white focus:ring-2 focus:ring-slate-900 focus:outline-hidden"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Geoteknisk markundersökning */}
+      <div className="p-4 rounded-lg border border-slate-200 bg-white space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-semibold text-slate-900 flex items-center space-x-2">
+            <Layers className="w-4 h-4 text-amber-700" />
+            <span>Geoteknisk markundersökning (jordprov, berg- & bärighetskontroll)</span>
+          </label>
+          {calculatedGeoteknikCost > 0 && (
+            <span className="text-xs font-bold text-slate-900">
+              +{formatCurrency(calculatedGeoteknikCost)}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-slate-500">
+          En geoteknisk undersökning med provborrning rekommenderas alltid före grundläggning för att fastställa
+          bergdjup, markens bärighet, grundvattennivå och eventuell radonavgång.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {PRESETS.geoteknik.map((item) => (
+            <label
+              key={item.value}
+              className={`flex items-start p-3 rounded-lg border text-xs cursor-pointer transition-colors ${
+                input.geoteknikMode === item.value
+                  ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-900 font-medium'
+                  : 'border-slate-200 hover:bg-slate-50 text-slate-600'
+              }`}
+            >
+              <input
+                type="radio"
+                name="geoteknikMode"
+                value={item.value}
+                checked={input.geoteknikMode === item.value}
+                onChange={() => onChange({ geoteknikMode: item.value as GeoteknikTier })}
+                className="mt-0.5 text-slate-900 focus:ring-slate-900 h-3.5 w-3.5"
+              />
+              <div className="ml-2.5 flex-1">
+                <div className="flex justify-between text-slate-900 font-semibold">
+                  <span>{item.label}</span>
+                  {item.cost !== undefined && <span>{formatCurrency(item.cost)}</span>}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">{item.description}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+
+        {input.geoteknikMode === 'custom' && (
+          <div className="pt-2">
+            <label htmlFor="customGeoteknikCost" className="text-xs font-medium text-slate-700 block mb-1">
+              Ange offertpris för geoteknisk undersökning (kr):
+            </label>
+            <input
+              id="customGeoteknikCost"
+              type="number"
+              min="0"
+              step="5000"
+              value={input.customGeoteknikCost}
+              onChange={(e) => onChange({ customGeoteknikCost: Number(e.target.value) || 0 })}
+              className="w-full max-w-xs px-3 py-1.5 text-xs sm:text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-slate-900 focus:outline-hidden"
             />
           </div>
         )}

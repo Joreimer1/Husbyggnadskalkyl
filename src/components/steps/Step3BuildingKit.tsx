@@ -1,7 +1,8 @@
-import { CalculationInput, PaintingMode } from '@/types/calculation';
+import { CalculationInput, PaintingMode, ArkitektTier } from '@/types/calculation';
 import { PRESETS } from '@/config/presets';
 import { formatCurrency, formatNumber } from '@/lib/formatters';
-import { Hammer, Paintbrush, PackageCheck, Warehouse } from 'lucide-react';
+import { Hammer, Paintbrush, PackageCheck, Warehouse, Compass } from 'lucide-react';
+import { calculateArkitektCost } from '@/lib/calculator';
 
 interface StepProps {
   input: CalculationInput;
@@ -28,6 +29,9 @@ export function Step3BuildingKit({ input, onChange }: StepProps) {
         ? input.customKomplementByggkostnad
         : input.extrabyggnaderYta * input.komplementByggkostnadPerKvm
       : 0;
+
+  // Beräknad arkitekt / konstruktör
+  const arkitektTotal = calculateArkitektCost(input);
 
   return (
     <div className="space-y-6">
@@ -340,6 +344,71 @@ export function Step3BuildingKit({ input, onChange }: StepProps) {
           <div className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-200">
             0 m² komplementbyggnadsyta är angiven i steg 1. Om ni planerar garage, carport eller förråd,
             ange kvadratmeterytan i steg 1 för att automatiskt beräkna byggkostnaden här.
+          </div>
+        )}
+      </div>
+
+      {/* Arkitekt & Konstruktör (Kataloghusanpassning & K-ritningar) */}
+      <div className="p-4 rounded-lg border border-slate-200 bg-white space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-semibold text-slate-900 flex items-center space-x-2">
+            <Compass className="w-4 h-4 text-slate-700" />
+            <span>Arkitekt och konstruktör (Kataloghusanpassning & K-ritningar)</span>
+          </label>
+          {arkitektTotal > 0 && (
+            <span className="text-xs font-bold text-slate-900">
+              +{formatCurrency(arkitektTotal)}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-slate-500">
+          Även vid kataloghus krävs ofta situationsplan, situationsanpassade bygglovsritningar,
+          konstruktionsritningar (K-ritningar för grund och bärande stomme) samt eventuella planlösningsjusteringar.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+          {PRESETS.arkitekt.map((preset) => (
+            <label
+              key={preset.value}
+              className={`flex items-start p-3 rounded-lg border cursor-pointer transition-colors ${
+                input.arkitektMode === preset.value
+                  ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-900 font-medium'
+                  : 'border-slate-200 hover:bg-slate-50 text-slate-600'
+              }`}
+            >
+              <input
+                type="radio"
+                name="arkitektMode"
+                value={preset.value}
+                checked={input.arkitektMode === preset.value}
+                onChange={() => onChange({ arkitektMode: preset.value as ArkitektTier })}
+                className="mt-0.5 text-slate-900 focus:ring-slate-900 h-3.5 w-3.5"
+              />
+              <div className="ml-2.5 flex-1">
+                <div className="flex justify-between font-semibold text-slate-900">
+                  <span>{preset.label}</span>
+                  {preset.cost !== undefined && <span>{formatCurrency(preset.cost)}</span>}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">{preset.description}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+
+        {input.arkitektMode === 'custom' && (
+          <div className="pt-2">
+            <label htmlFor="customArkitektCost" className="text-xs font-medium text-slate-700 block mb-1">
+              Offertbelopp för arkitekt / konstruktör (kr):
+            </label>
+            <input
+              id="customArkitektCost"
+              type="number"
+              min="0"
+              step="5000"
+              value={input.customArkitektCost}
+              onChange={(e) => onChange({ customArkitektCost: Number(e.target.value) || 0 })}
+              className="w-full max-w-xs px-3 py-1.5 text-xs sm:text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-slate-900 focus:outline-hidden"
+            />
           </div>
         )}
       </div>

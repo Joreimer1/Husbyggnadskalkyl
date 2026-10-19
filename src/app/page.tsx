@@ -29,19 +29,19 @@ const STEPS: StepItem[] = [
     id: 2,
     title: 'Markarbete, schakt och rivning',
     shortTitle: '2. Mark & Rivning',
-    description: 'Schaktning, bergsprängning, VA-rörgrav och rivningsbehov.',
+    description: 'Schaktning, bergsprängning, geoteknik, VA-rörgrav och rivning.',
   },
   {
     id: 3,
     title: 'Byggnation, husmaterialsats och montering',
     shortTitle: '3. Bygg & Material',
-    description: 'Husmaterialsats (10–14 tkr/m²), montering och målning.',
+    description: 'Husmaterialsats, montering, arkitekt/konstruktör och målning.',
   },
   {
     id: 4,
     title: 'Kommunala avgifter, tillstånd och KA',
     shortTitle: '4. Kommun & Tillstånd',
-    description: 'VA-anslutning (Värmdö vs Standard), bygglov, planavgift och KA.',
+    description: 'VA-anslutning, bygglov, planavgift, utstakning, försäkringar och KA.',
   },
   {
     id: 5,
@@ -59,7 +59,7 @@ const STEPS: StepItem[] = [
     id: 7,
     title: 'Utemiljö, tomt och finansiering',
     shortTitle: '7. Utemiljö & Finans',
-    description: 'Finplanering tomt, altan, byggnadskreditiv och pantbrev.',
+    description: 'Finplanering tomt, altan, buffert oförutsett, dubbelboende och finansiering.',
   },
 ];
 

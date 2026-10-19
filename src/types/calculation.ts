@@ -34,6 +34,16 @@ export type OtherOptionsTier = 'none' | 'small' | 'medium' | 'large' | 'custom';
 
 export type DeckSizeTier = 'none' | 'small' | 'medium' | 'large' | 'custom';
 
+export type ArkitektTier = 'none' | 'standard' | 'extensive' | 'custom';
+
+export type GeoteknikTier = 'none' | 'standard' | 'advanced' | 'custom';
+
+export type UtstakningMode = 'preset' | 'custom' | 'none';
+
+export type ByggfelsforsakringTier = 'standard' | 'comprehensive' | 'none' | 'custom';
+
+export type OforutsettMode = 'percent' | 'custom' | 'none';
+
 export interface CalculationInput {
   // Grundläggande dimensioner
   tomtPris: number;
@@ -47,6 +57,10 @@ export interface CalculationInput {
   grundarbetePreset: GroundworkPreset;
   customGrundarbeteCost: number;
 
+  // Geoteknisk markundersökning
+  geoteknikMode: GeoteknikTier;
+  customGeoteknikCost: number;
+
   // Extra avloppsgrävning
   extraAvloppEnabled: boolean;
   extraAvloppMeter: number;
@@ -56,6 +70,10 @@ export interface CalculationInput {
   byggkostnadMode: ByggkostnadMode;
   byggkostnadPerKvm: number;
   customByggkostnad: number;
+
+  // Arkitekt och konstruktör (Kataloghusanpassning & K-ritningar)
+  arkitektMode: ArkitektTier;
+  customArkitektCost: number;
 
   // Komplementbyggnad (garage, förråd, carport mm)
   inkluderaKomplementIByggkostnad: boolean;
@@ -80,7 +98,7 @@ export interface CalculationInput {
   byggelskapMode: LogisticsMode;
   customByggelskapCost: number;
 
-  // Kommunala avgifter (VA, Bygglov, Karta)
+  // Kommunala avgifter (VA, Bygglov, Karta, Utstakning, Försäkringar)
   kommunTyp: MunicipalityType;
   customVaCost: number;
 
@@ -90,6 +108,12 @@ export interface CalculationInput {
 
   nybyggnadskartaMode: 'preset' | 'custom';
   customNybyggnadskartaCost: number;
+
+  utstakningMode: UtstakningMode;
+  customUtstakningCost: number;
+
+  byggfelsforsakringMode: ByggfelsforsakringTier;
+  customByggfelsforsakringCost: number;
 
   // Fiber
   fiberPreset: FiberPreset;
@@ -113,6 +137,18 @@ export interface CalculationInput {
 
   behoverPantbrev: boolean;
   befintligtPantbrev: number; // Redan uttagna pantbrev på fastigheten
+
+  // Post för oförutsett (schablon 5 %)
+  oforutsettMode: OforutsettMode;
+  oforutsettProcent: number;
+  customOforutsettCost: number;
+
+  // Dubbelboende under byggtid
+  dubbelboendeEnabled: boolean;
+  dubbelboendeManader: number;
+  dubbelboendeKostnadPerManad: number;
+  dubbelboendeMode: 'calc' | 'custom';
+  customDubbelboendeCost: number;
 
   // Målning
   malningMode: PaintingMode;
@@ -200,4 +236,12 @@ export interface CalculationResult {
   pantbrevsbeloppNytt: number;
   pantbrevsavgift: number;
   kreditivkostnad: number;
+
+  // Specifika nya nyckelposter
+  arkitektKostnad: number;
+  geoteknikKostnad: number;
+  utstakningKostnad: number;
+  byggfelsforsakringKostnad: number;
+  oforutsettKostnad: number;
+  dubbelboendeKostnad: number;
 }

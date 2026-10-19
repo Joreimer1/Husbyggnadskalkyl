@@ -39,6 +39,58 @@ export function calculateRivningCost(
   return Math.round(input.rivningsYta * getRivningRate(input.harAsbestrisk));
 }
 
+export function calculateGeoteknikCost(
+  input: Pick<CalculationInput, 'geoteknikMode' | 'customGeoteknikCost'>
+): number {
+  if (input.geoteknikMode === 'none') return 0;
+  if (input.geoteknikMode === 'custom') return Math.max(0, input.customGeoteknikCost ?? 0);
+  const found = PRESETS.geoteknik.find((g) => g.value === input.geoteknikMode);
+  return found?.cost ?? 25000;
+}
+
+export function calculateArkitektCost(
+  input: Pick<CalculationInput, 'arkitektMode' | 'customArkitektCost'>
+): number {
+  if (input.arkitektMode === 'none') return 0;
+  if (input.arkitektMode === 'custom') return Math.max(0, input.customArkitektCost ?? 0);
+  const found = PRESETS.arkitekt.find((a) => a.value === input.arkitektMode);
+  return found?.cost ?? 35000;
+}
+
+export function calculateUtstakningCost(
+  input: Pick<CalculationInput, 'utstakningMode' | 'customUtstakningCost'>
+): number {
+  if (input.utstakningMode === 'none') return 0;
+  if (input.utstakningMode === 'custom') return Math.max(0, input.customUtstakningCost ?? 0);
+  return PRESETS.utstakning.schablon;
+}
+
+export function calculateByggfelsforsakringCost(
+  input: Pick<CalculationInput, 'byggfelsforsakringMode' | 'customByggfelsforsakringCost'>
+): number {
+  if (input.byggfelsforsakringMode === 'none') return 0;
+  if (input.byggfelsforsakringMode === 'custom') return Math.max(0, input.customByggfelsforsakringCost ?? 0);
+  const found = PRESETS.byggfelsforsakring.find((b) => b.value === input.byggfelsforsakringMode);
+  return found?.cost ?? 35000;
+}
+
+export function calculateDubbelboendeCost(
+  input: Pick<
+    CalculationInput,
+    | 'dubbelboendeEnabled'
+    | 'dubbelboendeMode'
+    | 'dubbelboendeManader'
+    | 'dubbelboendeKostnadPerManad'
+    | 'customDubbelboendeCost'
+  >
+): number {
+  if (!input.dubbelboendeEnabled) return 0;
+  if (input.dubbelboendeMode === 'custom') return Math.max(0, input.customDubbelboendeCost ?? 0);
+  const m = Math.max(0, input.dubbelboendeManader ?? PRESETS.dubbelboende.standardManader);
+  const rate = Math.max(0, input.dubbelboendeKostnadPerManad ?? PRESETS.dubbelboende.standardKostnadPerManad);
+  return Math.round(m * rate);
+}
+
 /**
  * Ren beräkningsfunktion för husbyggnadskalkyl.
  * Returnerar totalkostnad, kategorisummeringar samt en komplett lista över linjeposter.
@@ -101,6 +153,21 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
     formulaNote: input.grundarbetePreset === 'custom' ? 'Offertpris' : 'Schablonkostnad',
     isCustom: input.grundarbetePreset === 'custom',
   });
+
+  // Geoteknisk markundersökning
+  const geoteknikKostnad = calculateGeoteknikCost(input);
+  const matchGeoteknik = PRESETS.geoteknik.find((g) => g.value === input.geoteknikMode);
+  if (geoteknikKostnad > 0 || input.geoteknikMode !== 'none') {
+    items.push({
+      id: 'geoteknisk_undersokning',
+      category: 'mark_forberedelse',
+      name: `Geoteknisk undersökning (${matchGeoteknik?.label || 'Markundersökning'})`,
+      amount: geoteknikKostnad,
+      description: matchGeoteknik?.description || PRESETS.geoteknik[0].description,
+      formulaNote: input.geoteknikMode === 'custom' ? 'Offertpris' : `${geoteknikKostnad.toLocaleString('sv-SE')} kr`,
+      isCustom: input.geoteknikMode === 'custom',
+    });
+  }
 
   // Extra avloppsgrävning
   if (input.extraAvloppEnabled && input.extraAvloppMeter > 0) {
@@ -229,6 +296,21 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
     });
   }
 
+  // Arkitekt och konstruktör (Kataloghusanpassning & K-ritningar)
+  const arkitektKostnad = calculateArkitektCost(input);
+  const matchArkitekt = PRESETS.arkitekt.find((a) => a.value === input.arkitektMode);
+  if (arkitektKostnad > 0 || input.arkitektMode !== 'none') {
+    items.push({
+      id: 'arkitekt_konstruktor',
+      category: 'bygg_material',
+      name: `Arkitekt & Konstruktör (${matchArkitekt?.label || 'Projektering'})`,
+      amount: arkitektKostnad,
+      description: matchArkitekt?.description || 'Arvode för situationsplan, K-ritningar och kataloghusanpassning.',
+      formulaNote: input.arkitektMode === 'custom' ? 'Offertpris' : `${arkitektKostnad.toLocaleString('sv-SE')} kr`,
+      isCustom: input.arkitektMode === 'custom',
+    });
+  }
+
   // Målning
   let malningKostnad = 0;
   if (input.malningMode === 'custom') {
@@ -318,6 +400,35 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
     formulaNote: input.nybyggnadskartaMode === 'custom' ? 'Eget pris' : 'Schablon 15 000 kr',
     isCustom: input.nybyggnadskartaMode === 'custom',
   });
+
+  // Utstakning och lägeskontroll
+  const utstakningKostnad = calculateUtstakningCost(input);
+  if (utstakningKostnad > 0 || input.utstakningMode !== 'none') {
+    items.push({
+      id: 'utstakning',
+      category: 'kommun_myndighet',
+      name: 'Utstakning & Lägeskontroll (Grov-, finutstakning & kontroll)',
+      amount: utstakningKostnad,
+      description: PRESETS.utstakning.description,
+      formulaNote: input.utstakningMode === 'custom' ? 'Offert/Taxa' : 'Schablon 12 000 kr',
+      isCustom: input.utstakningMode === 'custom',
+    });
+  }
+
+  // Byggfelsförsäkring och färdigställandeskydd
+  const byggfelsforsakringKostnad = calculateByggfelsforsakringCost(input);
+  const matchByggfels = PRESETS.byggfelsforsakring.find((b) => b.value === input.byggfelsforsakringMode);
+  if (byggfelsforsakringKostnad > 0 || input.byggfelsforsakringMode !== 'none') {
+    items.push({
+      id: 'byggfelsforsakring',
+      category: 'kommun_myndighet',
+      name: `Byggfelsförsäkring & Färdigställandeskydd (${matchByggfels?.label || 'Försäkring'})`,
+      amount: byggfelsforsakringKostnad,
+      description: matchByggfels?.description || PRESETS.byggfelsforsakring[0].description,
+      formulaNote: input.byggfelsforsakringMode === 'custom' ? 'Offertpris' : `${byggfelsforsakringKostnad.toLocaleString('sv-SE')} kr`,
+      isCustom: input.byggfelsforsakringMode === 'custom',
+    });
+  }
 
   // Kontrollansvarig (KA)
   let kaKostnad = 0;
@@ -524,9 +635,55 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
   }
 
   // ==========================================
-  // 8. FINANSIERING & PANTBREV
+  // 8. FINANSIERING, BUFFERT & AVGIFTER
   // ==========================================
-  // Delsumma före finansieringskostnader
+  // Post för oförutsett (schablon 5 % på produktionskostnad exklusive tomt)
+  const productionBase = items
+    .filter((it) => it.category !== 'tomt_forvarv')
+    .reduce((sum, it) => sum + it.amount, 0);
+
+  let oforutsettKostnad = 0;
+  if (input.oforutsettMode === 'custom') {
+    oforutsettKostnad = Math.max(0, input.customOforutsettCost ?? 0);
+  } else if (input.oforutsettMode === 'percent') {
+    const pct = Math.max(0, input.oforutsettProcent ?? PRESETS.oforutsett.standardProcent);
+    oforutsettKostnad = Math.round(productionBase * (pct / 100));
+  }
+  if (oforutsettKostnad > 0 || input.oforutsettMode !== 'none') {
+    items.push({
+      id: 'oforutsett',
+      category: 'finansiering_avgifter',
+      name: `Post för oförutsett (${input.oforutsettMode === 'percent' ? `${input.oforutsettProcent} %` : 'Fast belopp'})`,
+      amount: oforutsettKostnad,
+      description: PRESETS.oforutsett.description,
+      formulaNote:
+        input.oforutsettMode === 'percent'
+          ? `${input.oforutsettProcent} % av ${productionBase.toLocaleString('sv-SE')} kr`
+          : 'Fast belopp',
+      isCustom: input.oforutsettMode === 'custom',
+    });
+  }
+
+  // Dubbelboende under byggtid
+  const dubbelboendeKostnad = calculateDubbelboendeCost(input);
+  if (input.dubbelboendeEnabled && (dubbelboendeKostnad > 0 || input.dubbelboendeMode === 'custom')) {
+    const dubbelM = input.dubbelboendeManader ?? PRESETS.dubbelboende.standardManader;
+    const dubbelRate = input.dubbelboendeKostnadPerManad ?? PRESETS.dubbelboende.standardKostnadPerManad;
+    items.push({
+      id: 'dubbelboende',
+      category: 'finansiering_avgifter',
+      name: `Dubbelboende under byggtid (${dubbelM} månader)`,
+      amount: dubbelboendeKostnad,
+      description: PRESETS.dubbelboende.description,
+      formulaNote:
+        input.dubbelboendeMode === 'custom'
+          ? 'Eget belopp'
+          : `${dubbelM} mån x ${dubbelRate.toLocaleString('sv-SE')} kr/mån`,
+      isCustom: input.dubbelboendeMode === 'custom',
+    });
+  }
+
+  // Delsumma före finansieringskostnader (kreditiv & pantbrev)
   const subtotalBeforeFinance = items.reduce((sum, item) => sum + item.amount, 0);
 
   // Beräkna uppskattat lånebelopp
@@ -625,8 +782,8 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
       description: 'Finplanering av tomtmark och uppförande av altan.',
     },
     finansiering_avgifter: {
-      title: 'Finansiering & Statliga avgifter',
-      description: 'Ränta för byggnadskreditiv samt stämpelskatt för pantbrev.',
+      title: 'Finansiering, buffert & avgifter',
+      description: 'Buffert för oförutsett (5 %), dubbelboende, byggnadskreditiv och pantbrev.',
     },
   };
 
@@ -673,5 +830,12 @@ export function calculateHouseProject(input: CalculationInput): CalculationResul
     pantbrevsbeloppNytt: nyttPantbrevsbelopp,
     pantbrevsavgift,
     kreditivkostnad,
+
+    arkitektKostnad,
+    geoteknikKostnad,
+    utstakningKostnad,
+    byggfelsforsakringKostnad,
+    oforutsettKostnad,
+    dubbelboendeKostnad,
   };
 }

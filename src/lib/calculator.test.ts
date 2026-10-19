@@ -5,6 +5,11 @@ import {
   calculateRivningCost,
   getExtraAvloppRate,
   getRivningRate,
+  calculateGeoteknikCost,
+  calculateArkitektCost,
+  calculateUtstakningCost,
+  calculateByggfelsforsakringCost,
+  calculateDubbelboendeCost,
 } from '@/lib/calculator';
 import { DEFAULT_CALCULATION_INPUT } from '@/config/presets';
 import type { CalculationInput } from '@/types/calculation';
@@ -20,11 +25,17 @@ function amountOf(result: ReturnType<typeof calc>, id: string): number | undefin
 describe('standardkalkyl (referensvärden)', () => {
   it('ger samma totalsumma som den publicerade standardkalkylen', () => {
     const result = calc();
-    expect(result.totalProjectCost).toBe(6_813_199);
+    expect(result.totalProjectCost).toBe(7_266_013);
     expect(amountOf(result, 'lagfart')).toBe(23_325);
-    expect(result.uppskattatLanebelopp).toBe(5_584_989);
-    expect(result.kreditivkostnad).toBe(130_549);
-    expect(result.pantbrevsavgift).toBe(112_075);
+    expect(amountOf(result, 'geoteknisk_undersokning')).toBe(25_000);
+    expect(amountOf(result, 'arkitekt_konstruktor')).toBe(35_000);
+    expect(amountOf(result, 'utstakning')).toBe(12_000);
+    expect(amountOf(result, 'byggfelsforsakring')).toBe(35_000);
+    expect(amountOf(result, 'oforutsett')).toBe(257_713);
+    expect(amountOf(result, 'dubbelboende')).toBe(72_000);
+    expect(result.uppskattatLanebelopp).toBe(5_956_195);
+    expect(result.kreditivkostnad).toBe(139_226);
+    expect(result.pantbrevsavgift).toBe(119_499);
   });
 
   it('summerar linjeposter och kategorier till samma total', () => {
@@ -141,3 +152,143 @@ describe('schabloner med värden', () => {
     expect(amountOf(result, 'badrum_kakel')).toBe(14_000);
   });
 });
+
+describe('geoteknisk markundersökning', () => {
+  it('standard ger 25 000 kr', () => {
+    expect(amountOf(calc({ geoteknikMode: 'standard' }), 'geoteknisk_undersokning')).toBe(25_000);
+  });
+
+  it('advanced ger 45 000 kr', () => {
+    expect(amountOf(calc({ geoteknikMode: 'advanced' }), 'geoteknisk_undersokning')).toBe(45_000);
+  });
+
+  it('none ger ingen post och 0 kr i beräkning', () => {
+    expect(amountOf(calc({ geoteknikMode: 'none' }), 'geoteknisk_undersokning')).toBeUndefined();
+    expect(calculateGeoteknikCost({ geoteknikMode: 'none', customGeoteknikCost: 0 })).toBe(0);
+  });
+
+  it('custom ger eget belopp', () => {
+    expect(amountOf(calc({ geoteknikMode: 'custom', customGeoteknikCost: 32_000 }), 'geoteknisk_undersokning')).toBe(32_000);
+  });
+
+  it('förhandsvisning i steg matchar kalkylposten', () => {
+    const input = { ...DEFAULT_CALCULATION_INPUT, geoteknikMode: 'advanced' as const };
+    expect(calculateGeoteknikCost(input)).toBe(amountOf(calculateHouseProject(input), 'geoteknisk_undersokning'));
+  });
+});
+
+describe('arkitekt och konstruktör', () => {
+  it('standard kataloghusanpassning ger 35 000 kr', () => {
+    expect(amountOf(calc({ arkitektMode: 'standard' }), 'arkitekt_konstruktor')).toBe(35_000);
+  });
+
+  it('extensive ger 80 000 kr', () => {
+    expect(amountOf(calc({ arkitektMode: 'extensive' }), 'arkitekt_konstruktor')).toBe(80_000);
+  });
+
+  it('none ger ingen post (ingår) och 0 kr i beräkning', () => {
+    expect(amountOf(calc({ arkitektMode: 'none' }), 'arkitekt_konstruktor')).toBeUndefined();
+    expect(calculateArkitektCost({ arkitektMode: 'none', customArkitektCost: 0 })).toBe(0);
+  });
+
+  it('custom ger eget belopp', () => {
+    expect(amountOf(calc({ arkitektMode: 'custom', customArkitektCost: 50_000 }), 'arkitekt_konstruktor')).toBe(50_000);
+  });
+
+  it('förhandsvisning i steg matchar kalkylposten', () => {
+    const input = { ...DEFAULT_CALCULATION_INPUT, arkitektMode: 'custom' as const, customArkitektCost: 42_000 };
+    expect(calculateArkitektCost(input)).toBe(amountOf(calculateHouseProject(input), 'arkitekt_konstruktor'));
+  });
+});
+
+describe('utstakning och lägeskontroll', () => {
+  it('preset ger 12 000 kr', () => {
+    expect(amountOf(calc({ utstakningMode: 'preset' }), 'utstakning')).toBe(12_000);
+  });
+
+  it('none ger ingen post och 0 kr i beräkning', () => {
+    expect(amountOf(calc({ utstakningMode: 'none' }), 'utstakning')).toBeUndefined();
+    expect(calculateUtstakningCost({ utstakningMode: 'none', customUtstakningCost: 0 })).toBe(0);
+  });
+
+  it('custom ger eget belopp', () => {
+    expect(amountOf(calc({ utstakningMode: 'custom', customUtstakningCost: 16_500 }), 'utstakning')).toBe(16_500);
+  });
+
+  it('förhandsvisning matchar kalkylposten', () => {
+    const input = { ...DEFAULT_CALCULATION_INPUT, utstakningMode: 'preset' as const };
+    expect(calculateUtstakningCost(input)).toBe(amountOf(calculateHouseProject(input), 'utstakning'));
+  });
+});
+
+describe('byggfelsförsäkring och färdigställandeskydd', () => {
+  it('standard ger 35 000 kr', () => {
+    expect(amountOf(calc({ byggfelsforsakringMode: 'standard' }), 'byggfelsforsakring')).toBe(35_000);
+  });
+
+  it('comprehensive ger 55 000 kr', () => {
+    expect(amountOf(calc({ byggfelsforsakringMode: 'comprehensive' }), 'byggfelsforsakring')).toBe(55_000);
+  });
+
+  it('none ger ingen post och 0 kr i beräkning', () => {
+    expect(amountOf(calc({ byggfelsforsakringMode: 'none' }), 'byggfelsforsakring')).toBeUndefined();
+    expect(calculateByggfelsforsakringCost({ byggfelsforsakringMode: 'none', customByggfelsforsakringCost: 0 })).toBe(0);
+  });
+
+  it('custom ger eget belopp', () => {
+    expect(amountOf(calc({ byggfelsforsakringMode: 'custom', customByggfelsforsakringCost: 40_000 }), 'byggfelsforsakring')).toBe(40_000);
+  });
+
+  it('förhandsvisning matchar kalkylposten', () => {
+    const input = { ...DEFAULT_CALCULATION_INPUT, byggfelsforsakringMode: 'comprehensive' as const };
+    expect(calculateByggfelsforsakringCost(input)).toBe(amountOf(calculateHouseProject(input), 'byggfelsforsakring'));
+  });
+});
+
+describe('post för oförutsett', () => {
+  it('schablon 5 % beräknas korrekt på produktionskostnaden exklusive tomt', () => {
+    const result = calc({ oforutsettMode: 'percent', oforutsettProcent: 5 });
+    const oforutsett = amountOf(result, 'oforutsett');
+    expect(oforutsett).toBeGreaterThan(0);
+    // Skall vara ca 5 % av produktionskostnaden
+    const prodItems = result.items.filter((it) => it.category !== 'tomt_forvarv' && it.id !== 'oforutsett' && it.id !== 'byggnadskreditiv' && it.id !== 'pantbrev' && it.id !== 'dubbelboende');
+    const prodSum = prodItems.reduce((s, it) => s + it.amount, 0);
+    expect(oforutsett).toBe(Math.round(prodSum * 0.05));
+  });
+
+  it('none ger ingen post', () => {
+    expect(amountOf(calc({ oforutsettMode: 'none' }), 'oforutsett')).toBeUndefined();
+  });
+
+  it('custom ger exakt angivet buffertbelopp', () => {
+    expect(amountOf(calc({ oforutsettMode: 'custom', customOforutsettCost: 150_000 }), 'oforutsett')).toBe(150_000);
+  });
+});
+
+describe('dubbelboende under byggtid', () => {
+  it('beräknar månader gånger månadskostnad när aktivt', () => {
+    const result = calc({ dubbelboendeEnabled: true, dubbelboendeManader: 8, dubbelboendeKostnadPerManad: 15_000 });
+    expect(amountOf(result, 'dubbelboende')).toBe(120_000);
+  });
+
+  it('ger ingen post när avaktiverat', () => {
+    expect(amountOf(calc({ dubbelboendeEnabled: false }), 'dubbelboende')).toBeUndefined();
+  });
+
+  it('custom läge ger eget belopp', () => {
+    const result = calc({ dubbelboendeEnabled: true, dubbelboendeMode: 'custom', customDubbelboendeCost: 95_000 });
+    expect(amountOf(result, 'dubbelboende')).toBe(95_000);
+  });
+
+  it('förhandsvisning matchar kalkylposten', () => {
+    const input = {
+      ...DEFAULT_CALCULATION_INPUT,
+      dubbelboendeEnabled: true,
+      dubbelboendeMode: 'calc' as const,
+      dubbelboendeManader: 10,
+      dubbelboendeKostnadPerManad: 12_000,
+    };
+    expect(calculateDubbelboendeCost(input)).toBe(amountOf(calculateHouseProject(input), 'dubbelboende'));
+  });
+});
+

@@ -2,7 +2,8 @@ import React from 'react';
 import { CalculationInput, DeckSizeTier } from '@/types/calculation';
 import { PRESETS } from '@/config/presets';
 import { formatCurrency } from '@/lib/formatters';
-import { Trees, Sun, Coins } from 'lucide-react';
+import { Trees, Sun, Coins, PiggyBank, Home } from 'lucide-react';
+import { calculateDubbelboendeCost } from '@/lib/calculator';
 
 interface StepProps {
   input: CalculationInput;
@@ -23,6 +24,18 @@ export function Step7LandscapeFinance({ input, onChange, subtotalBeforeFinance }
   if (input.altanVal === 'large') altanSqm = 75;
   if (input.altanVal === 'custom') altanSqm = input.altanKvm || 0;
   const altanTotal = input.altanVal !== 'none' ? altanSqm * input.altanKostnadPerKvm : 0;
+
+  // Buffert oförutsett
+  const oforutsettProcent = input.oforutsettProcent ?? 5;
+  const beraknadOforutsett =
+    input.oforutsettMode === 'none'
+      ? 0
+      : input.oforutsettMode === 'custom'
+      ? input.customOforutsettCost || 0
+      : Math.round(subtotalBeforeFinance * (oforutsettProcent / 100));
+
+  // Dubbelboende
+  const dubbelboendeTotal = calculateDubbelboendeCost(input);
 
   // Finansiering
   const belaningsgrad = (input.belaningsgradProcent || 85) / 100;
@@ -181,6 +194,173 @@ export function Step7LandscapeFinance({ input, onChange, subtotalBeforeFinance }
             </div>
             <div className="pt-4 text-slate-600">
               x {input.altanKostnadPerKvm} kr/m² = <strong>{formatCurrency(input.altanKvm * input.altanKostnadPerKvm)}</strong>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Post för oförutsett */}
+      <div className="p-4 rounded-lg border border-slate-200 bg-white space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-semibold text-slate-900 flex items-center space-x-2">
+            <PiggyBank className="w-4 h-4 text-emerald-600" />
+            <span>Post för oförutsett (rekommenderad buffert 5 %)</span>
+          </label>
+          {beraknadOforutsett > 0 && (
+            <span className="text-xs font-bold text-slate-900">
+              +{formatCurrency(beraknadOforutsett)}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-slate-500">
+          En buffert på ca 5 % av produktionskostnaden är standard i bankkalkyler för att täcka
+          oförutsedda markförhållanden, extra schaktmassor, kabeldragning och eventuella tilläggsbeställningar.
+        </p>
+
+        <div className="flex rounded-md border border-slate-200 p-0.5 bg-slate-50 max-w-sm">
+          <button
+            type="button"
+            onClick={() => onChange({ oforutsettMode: 'percent' })}
+            className={`flex-1 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer ${
+              input.oforutsettMode === 'percent'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Procentuell schablon (5 %)
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange({ oforutsettMode: 'custom' })}
+            className={`flex-1 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer ${
+              input.oforutsettMode === 'custom'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Fast belopp
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange({ oforutsettMode: 'none' })}
+            className={`px-3 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer ${
+              input.oforutsettMode === 'none'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Ingen
+          </button>
+        </div>
+
+        {input.oforutsettMode === 'percent' && (
+          <div className="pt-2 flex items-center space-x-3 text-xs">
+            <div>
+              <label htmlFor="oforutsettProcent" className="font-medium text-slate-700 block mb-1">
+                Buffertprocent:
+              </label>
+              <div className="flex items-center space-x-2">
+                <input
+                  id="oforutsettProcent"
+                  type="number"
+                  min="0"
+                  max="25"
+                  step="0.5"
+                  value={input.oforutsettProcent}
+                  onChange={(e) => onChange({ oforutsettProcent: Number(e.target.value) || 0 })}
+                  className="w-24 px-3 py-1.5 border border-slate-300 rounded-md focus:ring-2 focus:ring-slate-900 focus:outline-hidden"
+                />
+                <span className="text-slate-500">%</span>
+              </div>
+            </div>
+            <div className="pt-4 text-slate-600">
+              = <strong>{formatCurrency(beraknadOforutsett)}</strong> i avsatt buffert
+            </div>
+          </div>
+        )}
+
+        {input.oforutsettMode === 'custom' && (
+          <div className="pt-2">
+            <label htmlFor="customOforutsettCost" className="text-xs font-medium text-slate-700 block mb-1">
+              Ange eget buffertbelopp för oförutsett (kr):
+            </label>
+            <input
+              id="customOforutsettCost"
+              type="number"
+              min="0"
+              step="10000"
+              value={input.customOforutsettCost}
+              onChange={(e) => onChange({ customOforutsettCost: Number(e.target.value) || 0 })}
+              className="w-full max-w-xs px-3 py-1.5 text-xs sm:text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-slate-900 focus:outline-hidden"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Dubbelboende under byggtid */}
+      <div className="p-4 rounded-lg border border-slate-200 bg-white space-y-4">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center space-x-2">
+            <input
+              id="dubbelboendeEnabled"
+              type="checkbox"
+              checked={input.dubbelboendeEnabled}
+              onChange={(e) => onChange({ dubbelboendeEnabled: e.target.checked })}
+              className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+            />
+            <label htmlFor="dubbelboendeEnabled" className="text-sm font-semibold text-slate-900 cursor-pointer flex items-center space-x-1.5">
+              <Home className="w-4 h-4 text-indigo-600" />
+              <span>Dubbelboende och temporärt boende under byggtid</span>
+            </label>
+          </div>
+          {input.dubbelboendeEnabled && dubbelboendeTotal > 0 && (
+            <span className="text-xs font-bold text-slate-900">
+              +{formatCurrency(dubbelboendeTotal)}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-slate-500">
+          Under produktionstiden har man ofta merkostnader för nuvarande boende (t.ex. hyra för lägenhet,
+          räntor på befintligt lån eller magasinering av bohag) innan inflyttning kan ske.
+        </p>
+
+        {input.dubbelboendeEnabled && (
+          <div className="pt-3 border-t border-slate-100 space-y-3 text-xs bg-slate-50/60 p-3 rounded-lg border border-slate-200">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="dubbelboendeManader" className="font-medium text-slate-700 block mb-1">
+                  Antal månader dubbelboende:
+                </label>
+                <input
+                  id="dubbelboendeManader"
+                  type="number"
+                  min="1"
+                  max="24"
+                  value={input.dubbelboendeManader}
+                  onChange={(e) => onChange({ dubbelboendeManader: Number(e.target.value) || 0 })}
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded-md bg-white focus:ring-2 focus:ring-slate-900 focus:outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="dubbelboendeKostnadPerManad" className="font-medium text-slate-700 block mb-1">
+                  Månadskostnad för temporärt boende (kr/mån):
+                </label>
+                <input
+                  id="dubbelboendeKostnadPerManad"
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={input.dubbelboendeKostnadPerManad}
+                  onChange={(e) => onChange({ dubbelboendeKostnadPerManad: Number(e.target.value) || 0 })}
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded-md bg-white focus:ring-2 focus:ring-slate-900 focus:outline-hidden"
+                />
+              </div>
+            </div>
+
+            <div className="text-slate-600 text-[11px] pt-1">
+              Kalkyl: {input.dubbelboendeManader} månader x {formatCurrency(input.dubbelboendeKostnadPerManad)}/mån ={' '}
+              <strong className="text-slate-900">{formatCurrency(dubbelboendeTotal)}</strong>.
             </div>
           </div>
         )}

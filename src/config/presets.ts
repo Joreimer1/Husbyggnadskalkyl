@@ -10,6 +10,11 @@ import {
   BathroomTier,
   OtherOptionsTier,
   DeckSizeTier,
+  ArkitektTier,
+  GeoteknikTier,
+  UtstakningMode,
+  ByggfelsforsakringTier,
+  OforutsettMode,
 } from '@/types/calculation';
 
 export interface PresetOption<T> {
@@ -70,6 +75,33 @@ export const PRESETS = {
     },
   ] as PresetOption<GroundworkPreset>[],
 
+  // Geoteknisk markundersökning
+  geoteknik: [
+    {
+      value: 'standard',
+      label: 'Standard geoteknisk markundersökning',
+      description: 'Borrsondering mot fast botten/berg, jordartsbedömning och geoteknisk rapport med grundläggningsrekommendation.',
+      cost: 25000,
+    },
+    {
+      value: 'advanced',
+      label: 'Utökad undersökning vid svåra markförhållanden',
+      description: 'Djupare sondering, provtagning av lera/silt, släntstabilitetsanalys eller radonmarkmätning.',
+      cost: 45000,
+    },
+    {
+      value: 'none',
+      label: 'Ingen markundersökning (0 kr)',
+      description: 'Markförhållandena är redan kända eller undersökning ingår ej.',
+      cost: 0,
+    },
+    {
+      value: 'custom',
+      label: 'Offertpris från geotekniker',
+      description: 'Ange offertbelopp från anlitad geoteknisk konsult.',
+    },
+  ] as PresetOption<GeoteknikTier>[],
+
   // Extra avloppsgrävning
   extraAvlopp: [
     {
@@ -100,6 +132,33 @@ export const PRESETS = {
     schablonPerKvm: 10000,
     description: 'Schablonkostnad för montering och entreprenadarbete av stomme och insida (ca 10 000 kr/m²).',
   },
+
+  // Arkitekt och konstruktör (Kataloghusanpassning & K-ritningar)
+  arkitekt: [
+    {
+      value: 'standard',
+      label: 'Standardanpassning & K-ritningar',
+      description: 'Situationsplan, K-ritningar för grundläggning/stomme och smärre fasad-/planändringar av kataloghus.',
+      cost: 35000,
+    },
+    {
+      value: 'extensive',
+      label: 'Omfattande anpassningar & arkitekthjälp',
+      description: 'Större planlösnings- eller fasadändringar, bärande avväxlingar och specialdetaljer utöver hustillverkarens basritningar.',
+      cost: 80000,
+    },
+    {
+      value: 'none',
+      label: 'Inga tillkommande arvoden (0 kr)',
+      description: 'Hustillverkarens typritningar nyttjas helt utan ändringar och ingår i husmaterialsatsen.',
+      cost: 0,
+    },
+    {
+      value: 'custom',
+      label: 'Offert från arkitekt / konstruktionsbyrå',
+      description: 'Ange avtalat konsultarvode.',
+    },
+  ] as PresetOption<ArkitektTier>[],
 
   // Komplementbyggnad (garage, förråd, carport mm)
   komplementbyggnad: {
@@ -170,6 +229,41 @@ export const PRESETS = {
     description: 'Officiell nybyggnadskarta upprättad av kommunens mätningsavdelning eller auktoriserad mätkonsult för bygglovsansökan.',
   },
 
+  // Utstakning och lägeskontroll
+  utstakning: {
+    schablon: 12000,
+    intervallMin: 10000,
+    intervallMax: 18000,
+    description: 'Kommunal eller certifierad mätning: grovutstakning innan schakt, finutstakning (profiler) före grundgjutning samt lägeskontroll innan slutbesked.',
+  },
+
+  // Byggfelsförsäkring & Färdigställandeskydd
+  byggfelsforsakring: [
+    {
+      value: 'standard',
+      label: 'Färdigställandeskydd & oberoende slutbesiktning',
+      description: 'Lagstadgat färdigställandeskydd (försäkring vid entreprenörskonkurs) samt oberoende slutbesiktning av certifierad besiktningsman.',
+      cost: 35000,
+    },
+    {
+      value: 'comprehensive',
+      label: 'Utökat färdigställandeskydd + 10-årig byggfelsförsäkring',
+      description: 'Färdigställandeskydd, 10-års dolda fel-/byggfelsförsäkring (t.ex. Gar-Bo) samt för-, slut- och tvåårsbesiktning.',
+      cost: 55000,
+    },
+    {
+      value: 'none',
+      label: 'Ingår i entreprenadkontraktet / inget tillägg (0 kr)',
+      description: 'Huvudentreprenören tillhandahåller fullgod bankgaranti eller färdigställandeförsäkring utan separat debitering.',
+      cost: 0,
+    },
+    {
+      value: 'custom',
+      label: 'Eget offertbelopp för försäkring & besiktning',
+      description: 'Mata in kostnad enligt anbud från försäkringsbolag och besiktningsman.',
+    },
+  ] as PresetOption<ByggfelsforsakringTier>[],
+
   // Fiber
   fiber: [
     {
@@ -239,6 +333,21 @@ export const PRESETS = {
     pantbrevSkattesats: 0.02, // 2.0% statlig stämpelskatt
     pantbrevFastAvgift: 375, // Administrativ avgift per pantbrev
     description: 'Byggnadskreditiv debiteras ränta endast på utnyttjat belopp under produktionsfasen. Pantbrev beläggs med 2 % statlig stämpelskatt på nytecknat belopp.',
+  },
+
+  // Post för oförutsett
+  oforutsett: {
+    standardProcent: 5,
+    minProcent: 0,
+    maxProcent: 15,
+    description: 'Byggbranschens och bankernas standardrekommendation är att alltid avsätta minst 5 % av produktionskostnaden i buffert för extra schaktmassor, ledningsdragning och oförutsedda tilläggsarbeten.',
+  },
+
+  // Dubbelboende under byggtid
+  dubbelboende: {
+    standardManader: 6,
+    standardKostnadPerManad: 12000,
+    description: 'Merkostnad för tillfällig bostad, hyra, magasinering eller ränte- och driftskostnader för befintligt boende under byggnadstiden.',
   },
 
   // Målning av byggnader
@@ -436,6 +545,10 @@ export const DEFAULT_CALCULATION_INPUT: CalculationInput = {
   grundarbetePreset: 'trenching_sewer',
   customGrundarbeteCost: 200000,
 
+  // Geoteknisk markundersökning
+  geoteknikMode: 'standard',
+  customGeoteknikCost: 25000,
+
   // Extra avloppsgrävning
   extraAvloppEnabled: false,
   extraAvloppMeter: 20,
@@ -445,6 +558,10 @@ export const DEFAULT_CALCULATION_INPUT: CalculationInput = {
   byggkostnadMode: 'sqm',
   byggkostnadPerKvm: PRESETS.byggkostnad.schablonPerKvm,
   customByggkostnad: 1500000,
+
+  // Arkitekt och konstruktör
+  arkitektMode: 'standard',
+  customArkitektCost: 35000,
 
   // Komplementbyggnad
   inkluderaKomplementIByggkostnad: true,
@@ -480,6 +597,12 @@ export const DEFAULT_CALCULATION_INPUT: CalculationInput = {
   nybyggnadskartaMode: 'preset',
   customNybyggnadskartaCost: PRESETS.nybyggnadskarta.schablon,
 
+  utstakningMode: 'preset',
+  customUtstakningCost: 12000,
+
+  byggfelsforsakringMode: 'standard',
+  customByggfelsforsakringCost: 35000,
+
   // Fiber
   fiberPreset: 'campaign',
   customFiberCost: 25000,
@@ -502,6 +625,18 @@ export const DEFAULT_CALCULATION_INPUT: CalculationInput = {
 
   behoverPantbrev: true,
   befintligtPantbrev: 0,
+
+  // Post för oförutsett
+  oforutsettMode: 'percent',
+  oforutsettProcent: 5,
+  customOforutsettCost: 0,
+
+  // Dubbelboende under byggtid
+  dubbelboendeEnabled: true,
+  dubbelboendeManader: 6,
+  dubbelboendeKostnadPerManad: 12000,
+  dubbelboendeMode: 'calc',
+  customDubbelboendeCost: 72000,
 
   // Målning
   malningMode: 'large_house',

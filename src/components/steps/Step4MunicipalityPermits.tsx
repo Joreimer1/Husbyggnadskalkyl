@@ -1,8 +1,9 @@
 import React from 'react';
-import { CalculationInput, MunicipalityType } from '@/types/calculation';
+import { CalculationInput, MunicipalityType, ByggfelsforsakringTier } from '@/types/calculation';
 import { PRESETS } from '@/config/presets';
 import { formatCurrency } from '@/lib/formatters';
-import { Droplet, FileText, Map, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Droplet, FileText, Map, ShieldCheck, AlertCircle, Crosshair, Shield } from 'lucide-react';
+import { calculateByggfelsforsakringCost } from '@/lib/calculator';
 
 interface StepProps {
   input: CalculationInput;
@@ -14,6 +15,7 @@ export function Step4MunicipalityPermits({ input, onChange }: StepProps) {
   const planavgiftTotal = input.arInomPlanlagtOmrade
     ? Math.round(totalBta * input.planavgiftPerKvm)
     : 0;
+  const calculatedByggfelsforsakringCost = calculateByggfelsforsakringCost(input);
 
   return (
     <div className="space-y-6">
@@ -170,7 +172,7 @@ export function Step4MunicipalityPermits({ input, onChange }: StepProps) {
         )}
       </div>
 
-      {/* Nybyggnadskarta & KA */}
+      {/* Kartor, Mätning & Kontroll */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
         {/* Nybyggnadskarta */}
         <div className="p-4 rounded-lg border border-slate-200 bg-white space-y-2.5">
@@ -205,16 +207,62 @@ export function Step4MunicipalityPermits({ input, onChange }: StepProps) {
           </div>
         </div>
 
-        {/* Kontrollansvarig (KA) */}
+        {/* Utstakning och lägeskontroll */}
         <div className="p-4 rounded-lg border border-slate-200 bg-white space-y-2.5">
+          <label className="font-semibold text-slate-900 flex items-center space-x-2 text-sm">
+            <Crosshair className="w-4 h-4 text-slate-700" />
+            <span>Utstakning & Lägeskontroll</span>
+          </label>
+          <p className="text-slate-500 text-[11px]">
+            Grov-, finutstakning och lägeskontroll. Schablon 12 000 kr.
+          </p>
+          <div className="flex items-center space-x-2">
+            <input
+              type="number"
+              min="0"
+              step="1000"
+              value={
+                input.utstakningMode === 'custom'
+                  ? input.customUtstakningCost
+                  : input.utstakningMode === 'none'
+                  ? 0
+                  : PRESETS.utstakning.schablon
+              }
+              onChange={(e) =>
+                onChange({
+                  utstakningMode: 'custom',
+                  customUtstakningCost: Number(e.target.value) || 0,
+                })
+              }
+              className="w-full px-3 py-1.5 border border-slate-300 rounded-md focus:ring-2 focus:ring-slate-900 focus:outline-hidden text-xs sm:text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => onChange({ utstakningMode: 'preset', customUtstakningCost: PRESETS.utstakning.schablon })}
+              className="px-2.5 py-1.5 border border-slate-200 rounded text-[11px] hover:bg-slate-50 whitespace-nowrap cursor-pointer"
+            >
+              Schablon
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange({ utstakningMode: 'none', customUtstakningCost: 0 })}
+              className="px-2 py-1.5 border border-slate-200 rounded text-[11px] hover:bg-slate-50 whitespace-nowrap cursor-pointer text-slate-500"
+            >
+              0 kr
+            </button>
+          </div>
+        </div>
+
+        {/* Kontrollansvarig (KA) */}
+        <div className="p-4 rounded-lg border border-slate-200 bg-white space-y-2.5 sm:col-span-2">
           <label className="font-semibold text-slate-900 flex items-center space-x-2 text-sm">
             <ShieldCheck className="w-4 h-4 text-slate-700" />
             <span>Kvalitetsansvarig / KA (PBL)</span>
           </label>
           <p className="text-slate-500 text-[11px]">
-            Certifierad kontrollansvarig. Schablon ca 30 000 kr.
+            Certifierad kontrollansvarig enligt Plan- och bygglagen. Schablon ca 30 000 kr.
           </p>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 max-w-sm">
             <input
               type="number"
               min="0"
@@ -237,6 +285,71 @@ export function Step4MunicipalityPermits({ input, onChange }: StepProps) {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Byggfelsförsäkring & Färdigställandeskydd */}
+      <div className="p-4 rounded-lg border border-slate-200 bg-white space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-semibold text-slate-900 flex items-center space-x-2">
+            <Shield className="w-4 h-4 text-blue-600" />
+            <span>Färdigställandeskydd, byggfelsförsäkring och besiktning</span>
+          </label>
+          {calculatedByggfelsforsakringCost > 0 && (
+            <span className="text-xs font-bold text-slate-900">
+              +{formatCurrency(calculatedByggfelsforsakringCost)}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-slate-500">
+          Lagstadgat färdigställandeskydd krävs för att kommunen ska bevilja startbesked vid tekniskt samråd.
+          Därtill tecknas ofta 10-årig byggfelsförsäkring (Gar-Bo m.fl.) samt anlitas oberoende besiktningsman.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+          {PRESETS.byggfelsforsakring.map((preset) => (
+            <label
+              key={preset.value}
+              className={`flex items-start p-3 rounded-lg border cursor-pointer transition-colors ${
+                input.byggfelsforsakringMode === preset.value
+                  ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-900 font-medium'
+                  : 'border-slate-200 hover:bg-slate-50 text-slate-600'
+              }`}
+            >
+              <input
+                type="radio"
+                name="byggfelsforsakringMode"
+                value={preset.value}
+                checked={input.byggfelsforsakringMode === preset.value}
+                onChange={() => onChange({ byggfelsforsakringMode: preset.value as ByggfelsforsakringTier })}
+                className="mt-0.5 text-slate-900 focus:ring-slate-900 h-3.5 w-3.5"
+              />
+              <div className="ml-2.5 flex-1">
+                <div className="flex justify-between font-semibold text-slate-900">
+                  <span>{preset.label}</span>
+                  {preset.cost !== undefined && <span>{formatCurrency(preset.cost)}</span>}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">{preset.description}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+
+        {input.byggfelsforsakringMode === 'custom' && (
+          <div className="pt-2">
+            <label htmlFor="customByggfelsforsakringCost" className="text-xs font-medium text-slate-700 block mb-1">
+              Ange offertpris för försäkringar och besiktning (kr):
+            </label>
+            <input
+              id="customByggfelsforsakringCost"
+              type="number"
+              min="0"
+              step="5000"
+              value={input.customByggfelsforsakringCost}
+              onChange={(e) => onChange({ customByggfelsforsakringCost: Number(e.target.value) || 0 })}
+              className="w-full max-w-xs px-3 py-1.5 text-xs sm:text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-slate-900 focus:outline-hidden"
+            />
+          </div>
+        )}
       </div>
     </div>
   );
