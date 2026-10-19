@@ -2,6 +2,7 @@ import React from 'react';
 import { CalculationInput, GroundworkPreset, SewerTerrainType, InvasiveSpeciesType } from '@/types/calculation';
 import { PRESETS } from '@/config/presets';
 import { formatCurrency } from '@/lib/formatters';
+import { calculateExtraAvloppCost, calculateRivningCost } from '@/lib/calculator';
 import { Shovel, Trash2, Sprout } from 'lucide-react';
 
 interface StepProps {
@@ -10,15 +11,10 @@ interface StepProps {
 }
 
 export function Step2GroundDemolition({ input, onChange }: StepProps) {
-  // Beräknad extra avloppskostnad
-  let sewerRate = 1500;
-  if (input.extraAvloppTerrain === 'difficult') sewerRate = 3000;
-  if (input.extraAvloppTerrain === 'blasting') sewerRate = 6000;
-  const calculatedSewerCost = input.extraAvloppEnabled ? input.extraAvloppMeter * sewerRate : 0;
-
-  // Beräknad rivningskostnad
-  const demolitionRate = input.harAsbestrisk ? 6000 : 4000;
-  const calculatedDemolitionCost = input.harRivningsbehov ? input.rivningsYta * demolitionRate : 0;
+  // Samma funktioner som kalkylatorn använder, så att förhandsvisningen alltid
+  // stämmer med det som räknas in i totalen.
+  const calculatedSewerCost = calculateExtraAvloppCost(input);
+  const calculatedDemolitionCost = calculateRivningCost(input);
 
   return (
     <div className="space-y-6">

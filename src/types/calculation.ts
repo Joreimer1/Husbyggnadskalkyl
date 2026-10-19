@@ -51,7 +51,6 @@ export interface CalculationInput {
   extraAvloppEnabled: boolean;
   extraAvloppMeter: number;
   extraAvloppTerrain: SewerTerrainType;
-  customExtraAvloppCostPerMeter: number;
 
   // Byggentreprenad / montering
   byggkostnadMode: ByggkostnadMode;
@@ -88,7 +87,6 @@ export interface CalculationInput {
   bygglovGrundavgift: number;
   arInomPlanlagtOmrade: boolean;
   planavgiftPerKvm: number;
-  customPlanavgift: number;
 
   nybyggnadskartaMode: 'preset' | 'custom';
   customNybyggnadskartaCost: number;
@@ -101,7 +99,6 @@ export interface CalculationInput {
   harRivningsbehov: boolean;
   rivningsYta: number;
   harAsbestrisk: boolean;
-  customRivningskostnad: number;
 
   // Invasiva växter
   invasivaVaxterTyp: InvasiveSpeciesType;
@@ -128,12 +125,10 @@ export interface CalculationInput {
   antalBadrumTvatt: number;
   kvmPerVatutrymme: number;
   badrumKakelTillval: BathroomTier;
-  customBadrumExtraPerKvm: number;
   customBadrumTotalCost: number;
 
   uppgraderaGolv: boolean;
   golvKostnadPerKvm: number;
-  customGolvCost: number;
 
   ovrigaTillval: OtherOptionsTier;
   customOvrigaTillvalCost: number;
@@ -142,7 +137,6 @@ export interface CalculationInput {
   finplaneringTomt: boolean;
   finplaneringYtaKvm: number;
   finplaneringKostnadPerKvm: number;
-  customFinplaneringCost: number;
 
   altanVal: DeckSizeTier;
   altanKvm: number;
