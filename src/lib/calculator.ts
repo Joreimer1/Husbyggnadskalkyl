@@ -1,0 +1,669 @@
+import {
+  CalculationInput,
+  CalculationResult,
+  CalculationLineItem,
+  CalculationCategory,
+  CategorySummary,
+} from '@/types/calculation';
+import { PRESETS } from '@/config/presets';
+
+/**
+ * Ren beräkningsfunktion för husbyggnadskalkyl.
+ * Returnerar totalkostnad, kategorisummeringar samt en komplett lista över linjeposter.
+ */
+export function calculateHouseProject(input: CalculationInput): CalculationResult {
+  const items: CalculationLineItem[] = [];
+
+  // ==========================================
+  // 1. TOMT & FÖRVÄRV
+  // ==========================================
+  const tomtPris = Math.max(0, input.tomtPris || 0);
+  items.push({
+    id: 'tomt_pris',
+    category: 'tomt_forvarv',
+    name: 'Tomtpris / Fastighetsförvärv',
+    amount: tomtPris,
+    description: tomtPris > 0 ? 'Köpeskilling för tomtmark.' : 'Tomt ägs redan eller ingår ej.',
+    formulaNote: `${tomtPris.toLocaleString('sv-SE')} kr`,
+  });
+
+  const lagfartBelopp =
+    tomtPris > 0
+      ? Math.round(tomtPris * (input.lagfartProcent / 100) + PRESETS.lagfart.expeditionsavgift)
+      : 0;
+
+  items.push({
+    id: 'lagfart',
+    category: 'tomt_forvarv',
+    name: 'Lagfart (Stämpelskatt & avgift)',
+    amount: lagfartBelopp,
+    description: PRESETS.lagfart.description,
+    formulaNote:
+      tomtPris > 0
+        ? `${input.lagfartProcent}% av ${tomtPris.toLocaleString('sv-SE')} kr + ${PRESETS.lagfart.expeditionsavgift} kr exp.avgift`
+        : '0 kr (ingen tomtköpeskilling)',
+  });
+
+  // ==========================================
+  // 2. MARKARBETE & FÖRBEREDELSER
+  // ==========================================
+  let grundarbeteKostnad = 0;
+  let grundarbeteDesc = '';
+
+  if (input.grundarbetePreset === 'custom') {
+    grundarbeteKostnad = Math.max(0, input.customGrundarbeteCost || 0);
+    grundarbeteDesc = 'Offertpris enligt separat markanbud (exkl. platta).';
+  } else {
+    const foundPreset = PRESETS.grundarbete.find((p) => p.value === input.grundarbetePreset);
+    grundarbeteKostnad = foundPreset?.cost ?? 200000;
+    grundarbeteDesc = foundPreset?.description || '';
+  }
+
+  const selectedGrundarbeteOption = PRESETS.grundarbete.find((p) => p.value === input.grundarbetePreset);
+  items.push({
+    id: 'grundarbete',
+    category: 'mark_forberedelse',
+    name: `Grundarbete: ${selectedGrundarbeteOption?.label || 'Markarbete'}`,
+    amount: grundarbeteKostnad,
+    description: grundarbeteDesc,
+    formulaNote: input.grundarbetePreset === 'custom' ? 'Offertpris' : 'Schablonkostnad',
+    isCustom: input.grundarbetePreset === 'custom',
+  });
+
+  // Extra avloppsgrävning
+  let extraAvloppKostnad = 0;
+  if (input.extraAvloppEnabled && input.extraAvloppMeter > 0) {
+    let rate = 1500;
+    if (input.extraAvloppTerrain === 'difficult') rate = 3000;
+    if (input.extraAvloppTerrain === 'blasting') rate = 6000;
+    if (input.customExtraAvloppCostPerMeter > 0 && input.customExtraAvloppCostPerMeter !== rate) {
+      rate = input.customExtraAvloppCostPerMeter;
+    }
+    extraAvloppKostnad = Math.round(input.extraAvloppMeter * rate);
+    const terrainLabel =
+      PRESETS.extraAvlopp.find((t) => t.value === input.extraAvloppTerrain)?.label || '';
+
+    items.push({
+      id: 'extra_avlopp',
+      category: 'mark_forberedelse',
+      name: 'Extra rörgrav & VA-grävning',
+      amount: extraAvloppKostnad,
+      description: `${input.extraAvloppMeter} m schaktning i terräng: ${terrainLabel}.`,
+      formulaNote: `${input.extraAvloppMeter} m x ${rate.toLocaleString('sv-SE')} kr/m`,
+    });
+  }
+
+  // Invasiva växter (Parkslide mm)
+  let invasivaKostnad = 0;
+  if (input.invasivaVaxterTyp !== 'none') {
+    if (input.invasivaVaxterTyp === 'custom') {
+      invasivaKostnad = Math.max(0, input.customInvasivaVaxterCost || 0);
+    } else {
+      const match = PRESETS.invasivaVaxter.find((v) => v.value === input.invasivaVaxterTyp);
+      invasivaKostnad = match?.cost ?? 0;
+    }
+    const match = PRESETS.invasivaVaxter.find((v) => v.value === input.invasivaVaxterTyp);
+    items.push({
+      id: 'invasiva_vaxter',
+      category: 'mark_forberedelse',
+      name: `Sanering invasiva arter (${match?.label || 'Parkslide'})`,
+      amount: invasivaKostnad,
+      description: match?.description || 'Åtgärd för invasiva växter.',
+      formulaNote: input.invasivaVaxterTyp === 'custom' ? 'Offertpris' : 'Schablonkostnad',
+      isCustom: input.invasivaVaxterTyp === 'custom',
+    });
+  }
+
+  // Rivning
+  let rivningsKostnad = 0;
+  if (input.harRivningsbehov && input.rivningsYta > 0) {
+    if (input.customRivningskostnad > 0 && !input.harAsbestrisk) {
+      rivningsKostnad = input.customRivningskostnad;
+    } else {
+      const rate = input.harAsbestrisk
+        ? PRESETS.rivning.asbestPerKvm
+        : PRESETS.rivning.standardPerKvm;
+      rivningsKostnad = Math.round(input.rivningsYta * rate);
+    }
+
+    items.push({
+      id: 'rivning',
+      category: 'mark_forberedelse',
+      name: `Rivning av befintlig byggnad (${input.rivningsYta} m²)${input.harAsbestrisk ? ' inkl. asbestsanering' : ''}`,
+      amount: rivningsKostnad,
+      description: PRESETS.rivning.description,
+      formulaNote: `${input.rivningsYta} m² x ${input.harAsbestrisk ? '6 000' : '4 000'} kr/m²`,
+    });
+  }
+
+  // ==========================================
+  // 3. BYGGNATION & MATERIAL
+  // ==========================================
+  // Husmaterialsats
+  let husmaterialsatsKostnad = 0;
+  if (input.husmaterialsatsMode === 'fixed') {
+    husmaterialsatsKostnad = Math.max(0, input.customHusmaterialsatsFastPris || 0);
+  } else {
+    const rate = Math.max(0, input.husmaterialsatsPerKvm || PRESETS.husmaterialsats.recommendedPerKvm);
+    husmaterialsatsKostnad = Math.round(input.husBostadsyta * rate);
+  }
+
+  items.push({
+    id: 'husmaterialsats',
+    category: 'bygg_material',
+    name: 'Husmaterialsats / Byggsats',
+    amount: husmaterialsatsKostnad,
+    description: PRESETS.husmaterialsats.description,
+    formulaNote:
+      input.husmaterialsatsMode === 'fixed'
+        ? 'Fast avtalspris'
+        : `${input.husBostadsyta} m² x ${input.husmaterialsatsPerKvm.toLocaleString('sv-SE')} kr/m²`,
+    isCustom: input.husmaterialsatsMode === 'fixed',
+  });
+
+  // Byggentreprenad / montering
+  let byggkostnadTotal = 0;
+  if (input.byggkostnadMode === 'custom') {
+    byggkostnadTotal = Math.max(0, input.customByggkostnad || 0);
+  } else {
+    const rate = Math.max(0, input.byggkostnadPerKvm || PRESETS.byggkostnad.schablonPerKvm);
+    byggkostnadTotal = Math.round(input.husBostadsyta * rate);
+  }
+
+  items.push({
+    id: 'byggentreprenad',
+    category: 'bygg_material',
+    name: `Byggentreprenad / Montage huvudbyggnad (${input.husBostadsyta} m²)`,
+    amount: byggkostnadTotal,
+    description: PRESETS.byggkostnad.description,
+    formulaNote:
+      input.byggkostnadMode === 'custom'
+        ? 'Entreprenadoffert'
+        : `${input.husBostadsyta} m² x ${input.byggkostnadPerKvm.toLocaleString('sv-SE')} kr/m²`,
+    isCustom: input.byggkostnadMode === 'custom',
+  });
+
+  // Byggkostnad komplementbyggnad (om extrabyggnaderYta > 0 och aktiverad)
+  if (input.extrabyggnaderYta > 0 && input.inkluderaKomplementIByggkostnad) {
+    let komplementTotal = 0;
+    if (input.komplementByggkostnadMode === 'custom') {
+      komplementTotal = Math.max(0, input.customKomplementByggkostnad || 0);
+    } else {
+      const rate = Math.max(
+        0,
+        input.komplementByggkostnadPerKvm || PRESETS.komplementbyggnad.schablonPerKvm
+      );
+      komplementTotal = Math.round(input.extrabyggnaderYta * rate);
+    }
+
+    items.push({
+      id: 'byggkostnad_komplement',
+      category: 'bygg_material',
+      name: `Byggkostnad komplementbyggnad (Garage/förråd, ${input.extrabyggnaderYta} m²)`,
+      amount: komplementTotal,
+      description: PRESETS.komplementbyggnad.description,
+      formulaNote:
+        input.komplementByggkostnadMode === 'custom'
+          ? 'Offertpris'
+          : `${input.extrabyggnaderYta} m² x ${input.komplementByggkostnadPerKvm.toLocaleString('sv-SE')} kr/m²`,
+      isCustom: input.komplementByggkostnadMode === 'custom',
+    });
+  }
+
+  // Målning
+  let malningKostnad = 0;
+  if (input.malningMode === 'custom') {
+    malningKostnad = Math.max(0, input.customMalningCost || 0);
+  } else {
+    const match = PRESETS.malning.find((m) => m.value === input.malningMode);
+    malningKostnad = match?.cost ?? 200000;
+  }
+  const matchMalning = PRESETS.malning.find((m) => m.value === input.malningMode);
+
+  items.push({
+    id: 'malning',
+    category: 'bygg_material',
+    name: `Målning: ${matchMalning?.label || 'Exteriör & Interiör'}`,
+    amount: malningKostnad,
+    description:
+      'Målning ingår normalt inte från husleverantör utan måste utföras av separat målarfirma eller i egen regi.',
+    formulaNote: input.malningMode === 'custom' ? 'Offertpris' : 'Schablonkostnad',
+    isCustom: input.malningMode === 'custom',
+  });
+
+  // ==========================================
+  // 4. KOMMUNALT & MYNDIGHETER
+  // ==========================================
+  // VA-avgift
+  let vaKostnad = 0;
+  if (input.kommunTyp === 'custom') {
+    vaKostnad = Math.max(0, input.customVaCost || 0);
+  } else {
+    const match = PRESETS.vaAvgift.find((v) => v.value === input.kommunTyp);
+    vaKostnad = match?.cost ?? 360000;
+  }
+  const matchKommun = PRESETS.vaAvgift.find((v) => v.value === input.kommunTyp);
+
+  items.push({
+    id: 'va_avgift',
+    category: 'kommun_myndighet',
+    name: `Kommunal VA-anslutningsavgift (${matchKommun?.label || 'VA'})`,
+    amount: vaKostnad,
+    description: matchKommun?.description || 'Kommunal anläggningsavgift för vatten och spillvatten.',
+    formulaNote: input.kommunTyp === 'custom' ? 'Offert / Egen taxa' : 'Kommunal schablontaxa',
+    isCustom: input.kommunTyp === 'custom',
+  });
+
+  // Bygglov grundavgift
+  const bygglovAvgift = Math.max(0, input.bygglovGrundavgift || PRESETS.bygglov.grundavgift);
+  items.push({
+    id: 'bygglov_grund',
+    category: 'kommun_myndighet',
+    name: 'Bygglov (Handläggnings- & prövningsavgift)',
+    amount: bygglovAvgift,
+    description: 'Avgift enligt kommunal plan- och bygglovstaxa för prövning och startbesked.',
+    formulaNote: `${bygglovAvgift.toLocaleString('sv-SE')} kr`,
+  });
+
+  // Planavgift
+  let planavgift = 0;
+  if (input.arInomPlanlagtOmrade) {
+    if (input.customPlanavgift > 0 && input.planavgiftPerKvm === 0) {
+      planavgift = input.customPlanavgift;
+    } else {
+      const totalArea = (input.husBostadsyta || 0) + (input.extrabyggnaderYta || 0);
+      planavgift = Math.round(totalArea * (input.planavgiftPerKvm || PRESETS.bygglov.planavgiftDefaultPerKvm));
+    }
+
+    items.push({
+      id: 'planavgift',
+      category: 'kommun_myndighet',
+      name: 'Planavgift (Detaljplanerat område)',
+      amount: planavgift,
+      description: PRESETS.bygglov.legalNotice,
+      formulaNote: `${(input.husBostadsyta || 0) + (input.extrabyggnaderYta || 0)} m² BTA x ${input.planavgiftPerKvm} kr/m²`,
+    });
+  }
+
+  // Nybyggnadskarta
+  let nybyggnadskartaKostnad = 0;
+  if (input.nybyggnadskartaMode === 'custom') {
+    nybyggnadskartaKostnad = Math.max(0, input.customNybyggnadskartaCost || 0);
+  } else {
+    nybyggnadskartaKostnad = PRESETS.nybyggnadskarta.schablon;
+  }
+
+  items.push({
+    id: 'nybyggnadskarta',
+    category: 'kommun_myndighet',
+    name: 'Nybyggnadskarta',
+    amount: nybyggnadskartaKostnad,
+    description: PRESETS.nybyggnadskarta.description,
+    formulaNote: input.nybyggnadskartaMode === 'custom' ? 'Eget pris' : 'Schablon 15 000 kr',
+    isCustom: input.nybyggnadskartaMode === 'custom',
+  });
+
+  // Kontrollansvarig (KA)
+  let kaKostnad = 0;
+  if (input.kaMode === 'custom') {
+    kaKostnad = Math.max(0, input.customKaCost || 0);
+  } else {
+    kaKostnad = PRESETS.kvalitetsansvarig.schablon;
+  }
+
+  items.push({
+    id: 'kvalitetsansvarig',
+    category: 'kommun_myndighet',
+    name: 'Kontrollansvarig (KA enligt PBL)',
+    amount: kaKostnad,
+    description: PRESETS.kvalitetsansvarig.description,
+    formulaNote: input.kaMode === 'custom' ? 'Offertpris' : 'Schablon 30 000 kr',
+    isCustom: input.kaMode === 'custom',
+  });
+
+  // ==========================================
+  // 5. LOGISTIK & INFRASTRUKTUR
+  // ==========================================
+  // Fiber
+  let fiberKostnad = 0;
+  if (input.fiberPreset === 'custom') {
+    fiberKostnad = Math.max(0, input.customFiberCost || 0);
+  } else {
+    const match = PRESETS.fiber.find((f) => f.value === input.fiberPreset);
+    fiberKostnad = match?.cost ?? 25000;
+  }
+  const matchFiber = PRESETS.fiber.find((f) => f.value === input.fiberPreset);
+
+  items.push({
+    id: 'fiber',
+    category: 'logistik_infrastruktur',
+    name: `Fiberanslutning (${matchFiber?.label || 'Bredband'})`,
+    amount: fiberKostnad,
+    description: matchFiber?.description || 'Fast anslutning till fibernät.',
+    formulaNote: input.fiberPreset === 'custom' ? 'Offert' : `${fiberKostnad.toLocaleString('sv-SE')} kr`,
+    isCustom: input.fiberPreset === 'custom',
+  });
+
+  // Omlastningskostnad
+  if (input.omlastningBehov) {
+    const omlastningKostnad =
+      input.omlastningMode === 'custom'
+        ? Math.max(0, input.customOmlastningCost || 0)
+        : PRESETS.omlastning.schablon;
+
+    items.push({
+      id: 'omlastning',
+      category: 'logistik_infrastruktur',
+      name: 'Omlastning (Begränsad bärighet/vägbredd)',
+      amount: omlastningKostnad,
+      description: PRESETS.omlastning.description,
+      formulaNote: input.omlastningMode === 'custom' ? 'Offertpris' : 'Schablon 35 000 kr',
+      isCustom: input.omlastningMode === 'custom',
+    });
+  }
+
+  // Byggelskåp
+  const byggelskapKostnad =
+    input.byggelskapMode === 'custom'
+      ? Math.max(0, input.customByggelskapCost || 0)
+      : PRESETS.byggelskap.schablon;
+
+  items.push({
+    id: 'byggelskap',
+    category: 'logistik_infrastruktur',
+    name: 'Hyra av byggelskåp & etablering',
+    amount: byggelskapKostnad,
+    description: PRESETS.byggelskap.description,
+    formulaNote: input.byggelskapMode === 'custom' ? 'Offertpris' : 'Schablon 10 000 kr',
+    isCustom: input.byggelskapMode === 'custom',
+  });
+
+  // ==========================================
+  // 6. INTERIÖR & TILLVAL
+  // ==========================================
+  // Kök
+  let kokKostnad = 0;
+  if (input.kokTillval === 'custom') {
+    kokKostnad = Math.max(0, input.customKokCost || 0);
+  } else {
+    const match = PRESETS.kok.find((k) => k.value === input.kokTillval);
+    kokKostnad = match?.cost ?? 150000;
+  }
+  const matchKok = PRESETS.kok.find((k) => k.value === input.kokTillval);
+
+  items.push({
+    id: 'kok_tillval',
+    category: 'interior_tillval',
+    name: `Kökstillval: ${matchKok?.label || 'Tillval kök'}`,
+    amount: kokKostnad,
+    description: matchKok?.description || 'Tillägg för kökssnickerier och vitvaror.',
+    formulaNote: input.kokTillval === 'custom' ? 'Offert' : `${kokKostnad.toLocaleString('sv-SE')} kr`,
+    isCustom: input.kokTillval === 'custom',
+  });
+
+  // Badrum / Kakel
+  let badrumKostnad = 0;
+  const totalVatrumsyta = (input.antalBadrumTvatt || 0) * (input.kvmPerVatutrymme || 10);
+
+  if (input.badrumKakelTillval === 'custom') {
+    if (input.customBadrumTotalCost > 0) {
+      badrumKostnad = input.customBadrumTotalCost;
+    } else {
+      badrumKostnad = Math.round(totalVatrumsyta * (input.customBadrumExtraPerKvm || 0));
+    }
+  } else {
+    const match = PRESETS.badrum.tiers.find((b) => b.value === input.badrumKakelTillval);
+    const extraRate = match?.ratePerUnit ?? 0;
+    badrumKostnad = Math.round(totalVatrumsyta * extraRate);
+  }
+  const matchBadrum = PRESETS.badrum.tiers.find((b) => b.value === input.badrumKakelTillval);
+
+  items.push({
+    id: 'badrum_kakel',
+    category: 'interior_tillval',
+    name: `Badrum & klinker (${input.antalBadrumTvatt} st våtrum, tot ${totalVatrumsyta} m²)`,
+    amount: badrumKostnad,
+    description: `${matchBadrum?.label || 'Tillval'}: ${matchBadrum?.description || ''}`,
+    formulaNote:
+      input.badrumKakelTillval === 'custom'
+        ? 'Eget val'
+        : `${totalVatrumsyta} m² x ${matchBadrum?.ratePerUnit ?? 0} kr/m²`,
+    isCustom: input.badrumKakelTillval === 'custom',
+  });
+
+  // Golv
+  let golvKostnad = 0;
+  if (input.uppgraderaGolv) {
+    if (input.customGolvCost > 0 && input.golvKostnadPerKvm === 0) {
+      golvKostnad = input.customGolvCost;
+    } else {
+      const rate = input.golvKostnadPerKvm || PRESETS.golv.merprisPerKvm;
+      golvKostnad = Math.round((input.husBostadsyta || 0) * rate);
+    }
+
+    items.push({
+      id: 'golv_uppgradering',
+      category: 'interior_tillval',
+      name: `Golvuppgradering (${input.husBostadsyta} m² parkett)`,
+      amount: golvKostnad,
+      description: `${PRESETS.golv.brandExample}. ${PRESETS.golv.notice}`,
+      formulaNote: `${input.husBostadsyta} m² x ${(input.golvKostnadPerKvm || PRESETS.golv.merprisPerKvm).toLocaleString('sv-SE')} kr/m²`,
+    });
+  }
+
+  // Övriga tillval
+  let ovrigaKostnad = 0;
+  if (input.ovrigaTillval === 'custom') {
+    ovrigaKostnad = Math.max(0, input.customOvrigaTillvalCost || 0);
+  } else {
+    const match = PRESETS.ovrigaTillval.find((o) => o.value === input.ovrigaTillval);
+    ovrigaKostnad = match?.cost ?? 50000;
+  }
+  const matchOvriga = PRESETS.ovrigaTillval.find((o) => o.value === input.ovrigaTillval);
+
+  if (ovrigaKostnad > 0 || input.ovrigaTillval !== 'none') {
+    items.push({
+      id: 'ovriga_tillval',
+      category: 'interior_tillval',
+      name: `Övriga tillval: ${matchOvriga?.label || 'Tillval'}`,
+      amount: ovrigaKostnad,
+      description: matchOvriga?.description || 'Bredare trappa, fasadbelysning mm.',
+      formulaNote: input.ovrigaTillval === 'custom' ? 'Offert' : `${ovrigaKostnad.toLocaleString('sv-SE')} kr`,
+      isCustom: input.ovrigaTillval === 'custom',
+    });
+  }
+
+  // ==========================================
+  // 7. TRÄDGÅRD & UTEMILJÖ
+  // ==========================================
+  // Finplanering tomt
+  let finplaneringKostnad = 0;
+  if (input.finplaneringTomt && input.finplaneringYtaKvm > 0) {
+    if (input.customFinplaneringCost > 0 && input.finplaneringKostnadPerKvm === 0) {
+      finplaneringKostnad = input.customFinplaneringCost;
+    } else {
+      const rate = input.finplaneringKostnadPerKvm || PRESETS.finplaneringTomt.recommendedPerKvm;
+      finplaneringKostnad = Math.round(input.finplaneringYtaKvm * rate);
+    }
+
+    items.push({
+      id: 'finplanering_tomt',
+      category: 'tradgard_utemiljo',
+      name: `Finplanering tomt (${input.finplaneringYtaKvm} m²)`,
+      amount: finplaneringKostnad,
+      description: PRESETS.finplaneringTomt.description,
+      formulaNote: `${input.finplaneringYtaKvm} m² x ${input.finplaneringKostnadPerKvm} kr/m²`,
+    });
+  }
+
+  // Altan
+  let altanKostnad = 0;
+  if (input.altanVal !== 'none') {
+    let sqm = 40;
+    if (input.altanVal === 'small') sqm = 20;
+    if (input.altanVal === 'medium') sqm = 40;
+    if (input.altanVal === 'large') sqm = 75;
+    if (input.altanVal === 'custom') sqm = input.altanKvm || 0;
+
+    const rate = input.altanKostnadPerKvm || PRESETS.altan.schablonPerKvm;
+    altanKostnad = Math.round(sqm * rate);
+
+    items.push({
+      id: 'altan',
+      category: 'tradgard_utemiljo',
+      name: `Altan / Trädäck (${sqm} m²)`,
+      amount: altanKostnad,
+      description: `Trädäck uppfört i tryckimpregnerat virke inklusive plintar, bärlinor och trall.`,
+      formulaNote: `${sqm} m² x ${rate.toLocaleString('sv-SE')} kr/m²`,
+    });
+  }
+
+  // ==========================================
+  // 8. FINANSIERING & PANTBREV
+  // ==========================================
+  // Delsumma före finansieringskostnader
+  const subtotalBeforeFinance = items.reduce((sum, item) => sum + item.amount, 0);
+
+  // Beräkna uppskattat lånebelopp
+  const belaningsgrad = Math.min(100, Math.max(0, input.belaningsgradProcent || 85)) / 100;
+  const beraknatLanebelopp =
+    input.egetLanebelopp > 0
+      ? input.egetLanebelopp
+      : Math.round(subtotalBeforeFinance * belaningsgrad);
+
+  // Byggnadskreditiv
+  let kreditivkostnad = 0;
+  if (input.beraknaKreditiv && beraknatLanebelopp > 0) {
+    const rantesats = (input.kreditivRantesatsProcent || PRESETS.finansiering.rantesatsSchablon) / 100;
+    const ar = (input.kreditivByggtidManader || PRESETS.finansiering.standardByggtidManader) / 12;
+    // Byggnadskreditiv dras successivt under byggtiden, schablon 55 % snittutnyttjande
+    kreditivkostnad = Math.round(
+      beraknatLanebelopp * rantesats * ar * PRESETS.finansiering.genomsnittligtUtnyttjandeGrad
+    );
+
+    items.push({
+      id: 'byggnadskreditiv',
+      category: 'finansiering_avgifter',
+      name: 'Ränta byggnadskreditiv under byggtiden',
+      amount: kreditivkostnad,
+      description: `Räntekostnad för byggnadskreditiv beräknat på ${beraknatLanebelopp.toLocaleString('sv-SE')} kr i lån med ${input.kreditivRantesatsProcent} % ränta under ${input.kreditivByggtidManader} månader (genomsnittlig utnyttjandegrad 55 %).`,
+      formulaNote: `${input.kreditivRantesatsProcent} % ränta, ${input.kreditivByggtidManader} mån`,
+    });
+  }
+
+  // Pantbrev
+  let pantbrevsavgift = 0;
+  let nyttPantbrevsbelopp = 0;
+  if (input.behoverPantbrev && beraknatLanebelopp > 0) {
+    const befintligt = Math.max(0, input.befintligtPantbrev || 0);
+    nyttPantbrevsbelopp = Math.max(0, beraknatLanebelopp - befintligt);
+
+    if (nyttPantbrevsbelopp > 0) {
+      pantbrevsavgift = Math.round(
+        nyttPantbrevsbelopp * PRESETS.finansiering.pantbrevSkattesats +
+          PRESETS.finansiering.pantbrevFastAvgift
+      );
+
+      items.push({
+        id: 'pantbrev',
+        category: 'finansiering_avgifter',
+        name: 'Pantbrevsavgift (Stämpelskatt 2 %)',
+        amount: pantbrevsavgift,
+        description: `Stämpelskatt på nytecknade pantbrev för ${nyttPantbrevsbelopp.toLocaleString('sv-SE')} kr (efter avdrag för ${befintligt.toLocaleString('sv-SE')} kr i befintliga pantbrev).`,
+        formulaNote: `2 % av ${nyttPantbrevsbelopp.toLocaleString('sv-SE')} kr + 375 kr avgift`,
+      });
+    }
+  }
+
+  // ==========================================
+  // SUMMERING & RESULTAT
+  // ==========================================
+  const totalProjectCost = items.reduce((sum, item) => sum + item.amount, 0);
+
+  const husArea = Math.max(1, input.husBostadsyta || 1);
+  const costPerSqmTotal = Math.round(totalProjectCost / husArea);
+
+  // Kategorikartläggning
+  const categoryMeta: Record<
+    CalculationCategory,
+    { title: string; description: string }
+  > = {
+    tomt_forvarv: {
+      title: 'Tomt & Fastighetsförvärv',
+      description: 'Köpeskilling för tomtmark och lagfartskostnader.',
+    },
+    mark_forberedelse: {
+      title: 'Markarbete & Tomtförberedelser',
+      description: 'Schaktning, bergsprängning, VA-rörgrav, invasiva arter och rivning.',
+    },
+    bygg_material: {
+      title: 'Byggnation & Entreprenad',
+      description: 'Husbyggsats, montering, stomresning och målning.',
+    },
+    kommun_myndighet: {
+      title: 'Kommunala avgifter & Tillstånd',
+      description: 'Kommunal VA-anslutning, bygglov, planavgift, nybyggnadskarta och KA.',
+    },
+    logistik_infrastruktur: {
+      title: 'Infrastruktur & Etablering',
+      description: 'Fiberbredband, omlastning för trång väg och hyra av byggelskåp.',
+    },
+    interior_tillval: {
+      title: 'Inredning & Tillval',
+      description: 'Kökstillval, badrumskakel, golvuppgradering och snickeritillval.',
+    },
+    tradgard_utemiljo: {
+      title: 'Utemiljö & Trädgård',
+      description: 'Finplanering av tomtmark och uppförande av altan.',
+    },
+    finansiering_avgifter: {
+      title: 'Finansiering & Statliga avgifter',
+      description: 'Ränta för byggnadskreditiv samt stämpelskatt för pantbrev.',
+    },
+  };
+
+  const categories: Record<CalculationCategory, CategorySummary> = {
+    tomt_forvarv: { id: 'tomt_forvarv', ...categoryMeta.tomt_forvarv, total: 0, items: [] },
+    mark_forberedelse: { id: 'mark_forberedelse', ...categoryMeta.mark_forberedelse, total: 0, items: [] },
+    bygg_material: { id: 'bygg_material', ...categoryMeta.bygg_material, total: 0, items: [] },
+    kommun_myndighet: { id: 'kommun_myndighet', ...categoryMeta.kommun_myndighet, total: 0, items: [] },
+    logistik_infrastruktur: { id: 'logistik_infrastruktur', ...categoryMeta.logistik_infrastruktur, total: 0, items: [] },
+    interior_tillval: { id: 'interior_tillval', ...categoryMeta.interior_tillval, total: 0, items: [] },
+    tradgard_utemiljo: { id: 'tradgard_utemiljo', ...categoryMeta.tradgard_utemiljo, total: 0, items: [] },
+    finansiering_avgifter: { id: 'finansiering_avgifter', ...categoryMeta.finansiering_avgifter, total: 0, items: [] },
+  };
+
+  for (const item of items) {
+    if (categories[item.category]) {
+      categories[item.category].items.push(item);
+      categories[item.category].total += item.amount;
+    }
+  }
+
+  const categoryList = Object.values(categories);
+
+  const costPerSqmBuildingOnly = Math.round(categories.bygg_material.total / husArea);
+
+  return {
+    totalProjectCost,
+    costPerSqmTotal,
+    costPerSqmBuildingOnly,
+    categories,
+    categoryList,
+    items,
+
+    tomtSubtotal: categories.tomt_forvarv.total,
+    markSubtotal: categories.mark_forberedelse.total,
+    husSubtotal: categories.bygg_material.total,
+    kommunSubtotal: categories.kommun_myndighet.total,
+    infrastrukturSubtotal: categories.logistik_infrastruktur.total,
+    tillvalSubtotal: categories.interior_tillval.total,
+    tradgardSubtotal: categories.tradgard_utemiljo.total,
+    finansieringSubtotal: categories.finansiering_avgifter.total,
+
+    uppskattatLanebelopp: beraknatLanebelopp,
+    pantbrevsbeloppNytt: nyttPantbrevsbelopp,
+    pantbrevsavgift,
+    kreditivkostnad,
+  };
+}
