@@ -157,7 +157,7 @@ export default function HouseCalculatorPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-100">
-      {/* Professionell Header */}
+      {/* Header */}
       <Header onReset={handleReset} onPrint={handlePrint} />
 
       {/* Stegindikator & lägesväljare */}

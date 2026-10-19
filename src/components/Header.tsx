@@ -24,7 +24,7 @@ export function Header({ onReset, onPrint }: HeaderProps) {
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-                Professionell produktionskostnadskalkyl och schablonmodell för småhus och tillhörande markentreprenad.
+                Produktionskostnadskalkyl och schablonmodell för småhus och tillhörande markentreprenad.
               </p>
             </div>
           </div>

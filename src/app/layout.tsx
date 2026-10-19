@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'Husbyggnadskalkylator - Produktionskostnadskalkyl för nybyggnation',
   description:
-    'Professionell kalkylator för nybyggnation av småhus, tomtköp, kommunala VA-avgifter, markarbete, bygglov, husbyggsats och finansiering.',
+    'Kalkylator för nybyggnation av småhus, tomtköp, kommunala VA-avgifter, markarbete, bygglov, husbyggsats och finansiering.',
 };
 
 export default function RootLayout({
